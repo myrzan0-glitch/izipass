@@ -143,3 +143,15 @@ export async function duplicateEvent(db: Db, organizer: Organizer, eventId: stri
   }
   throw new SlugTakenError(base)
 }
+
+/** A published or cancelled event by id, with its organizer (for public files like .ics). */
+export async function getPublicEventById(db: Db, eventId: string) {
+  if (!isUuid(eventId)) return null
+  const [row] = await db
+    .select({ event: events, organizer: organizers })
+    .from(events)
+    .innerJoin(organizers, eq(organizers.id, events.organizerId))
+    .where(and(eq(events.id, eventId), ne(events.status, "draft")))
+    .limit(1)
+  return row ?? null
+}

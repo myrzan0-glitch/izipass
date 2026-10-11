@@ -4,10 +4,8 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { ExternalLink, Plus } from "lucide-react"
 
-import { saveOrganizerAction } from "@/app/[lang]/dashboard/actions"
 import { DashboardShell } from "@/components/dashboard-shell"
 import { EventStatusBadge } from "@/components/event-status"
-import { OrganizerForm } from "@/components/organizer-form"
 import { RegistrationStatusBadge } from "@/components/registration-status"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -32,41 +30,67 @@ export async function generateMetadata({ params }: PageProps<"/[lang]/dashboard"
   return { title: (await getDictionary(lang)).dashboard.title, robots: { index: false } }
 }
 
+type Mine = Awaited<ReturnType<typeof listUserRegistrations>>
+
+/** The person's own registrations: upcoming (soonest first), then past. */
+function MyTickets({ lang, dict, mine, now }: { lang: Locale; dict: Dictionary; mine: Mine; now: Date }) {
+  const cutoff = now.getTime() - 6 * 3_600_000
+  const upcoming = mine.filter((r) => r.event.startsAt.getTime() >= cutoff).reverse()
+  const past = mine.filter((r) => r.event.startsAt.getTime() < cutoff)
+  const item = ({ registration, event }: Mine[number], dim = false) => (
+    <Link
+      key={registration.id}
+      href={`/${lang}/r/${registration.id}`}
+      className={`flex items-center justify-between gap-4 rounded-md border p-3 text-sm hover:bg-accent/40 ${dim ? "opacity-70" : ""}`}
+    >
+      <span className="flex min-w-0 flex-col">
+        <span className="truncate font-medium">{event.title}</span>
+        <span className="text-muted-foreground">{formatDateTime(event.startsAt, lang)}</span>
+      </span>
+      <RegistrationStatusBadge status={registration.status} dict={dict.registrationStatus} />
+    </Link>
+  )
+  return (
+    <Card id="tickets" className="gap-4 scroll-mt-6">
+      <CardHeader>
+        <CardTitle>{dict.dashboard.myTickets}</CardTitle>
+        {mine.length === 0 && <CardDescription>{dict.dashboard.noTickets}</CardDescription>}
+      </CardHeader>
+      {mine.length > 0 && (
+        <CardContent className="flex flex-col gap-3">
+          {upcoming.map((r) => item(r))}
+          {past.length > 0 && <p className="pt-2 text-xs font-medium text-muted-foreground">{dict.dashboard.past}</p>}
+          {past.map((r) => item(r, true))}
+        </CardContent>
+      )}
+    </Card>
+  )
+}
+
 async function Dashboard({ lang, dict }: { lang: Locale; dict: Dictionary }) {
   const user = await requireUser(lang)
   const organizer = await getOrganizerForUser(db(), user.id)
 
+  const mine = await listUserRegistrations(db(), user.id)
+  const now = new Date()
+
   if (!organizer) {
-    const mine = await listUserRegistrations(db(), user.id)
     return (
       <DashboardShell lang={lang} dict={dict} title={dict.dashboard.title} description={fmt(dict.dashboard.welcome, { name: user.name || user.email || "" })}>
-        <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
-          <Card className="gap-4">
-            <CardHeader>
-              <CardTitle>{dict.dashboard.myTickets}</CardTitle>
-              {mine.length === 0 && <CardDescription>{dict.dashboard.noTickets}</CardDescription>}
-            </CardHeader>
-            {mine.length > 0 && (
-              <CardContent className="flex flex-col gap-3">
-                {mine.map(({ registration, event }) => (
-                  <Link key={registration.id} href={`/${lang}/r/${registration.id}`} className="flex items-center justify-between gap-4 rounded-md border p-3 text-sm hover:bg-accent/40">
-                    <span className="flex flex-col">
-                      <span className="font-medium">{event.title}</span>
-                      <span className="text-muted-foreground">{formatDateTime(event.startsAt, lang)}</span>
-                    </span>
-                    <RegistrationStatusBadge status={registration.status} dict={dict.registrationStatus} />
-                  </Link>
-                ))}
-              </CardContent>
-            )}
-          </Card>
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
+          <MyTickets lang={lang} dict={dict} mine={mine} now={now} />
           <Card>
             <CardHeader>
-              <CardTitle>{dict.organizer.createTitle}</CardTitle>
-              <CardDescription>{dict.organizer.createSubtitle}</CardDescription>
+              <CardTitle>{dict.dashboard.organizeTitle}</CardTitle>
+              <CardDescription>{dict.dashboard.organizeBody}</CardDescription>
             </CardHeader>
             <CardContent>
-              <OrganizerForm lang={lang} organizer={null} action={saveOrganizerAction} dict={dict} />
+              <Button variant="outline" asChild>
+                <Link href={`/${lang}/dashboard/organizer/new`}>
+                  <Plus />
+                  {dict.dashboard.organizeCta}
+                </Link>
+              </Button>
             </CardContent>
           </Card>
         </div>
@@ -196,6 +220,7 @@ async function Dashboard({ lang, dict }: { lang: Locale; dict: Dictionary }) {
           </CardContent>
         )}
       </Card>
+      {mine.length > 0 && <MyTickets lang={lang} dict={dict} mine={mine} now={now} />}
     </DashboardShell>
   )
 }

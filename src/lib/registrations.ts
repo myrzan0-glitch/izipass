@@ -441,3 +441,14 @@ export async function nextToReview(db: Db, eventId: string, exceptId?: string) {
     .limit(1)
   return row?.id ?? null
 }
+
+/** The registration's newest receipt, for showing it back to the attendee. */
+export async function latestReceiptId(db: Db, registrationId: string) {
+  const [row] = await db
+    .select({ id: receipts.id })
+    .from(receipts)
+    .where(eq(receipts.registrationId, registrationId))
+    .orderBy(desc(receipts.createdAt))
+    .limit(1)
+  return row?.id ?? null
+}

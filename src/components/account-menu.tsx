@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { LayoutDashboard, LogOut } from "lucide-react"
+import { LayoutDashboard, LogOut, Ticket } from "lucide-react"
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -55,6 +55,12 @@ export function AccountMenu({ lang, name, detail, dict }: Props) {
           <Link href={`/${lang}/dashboard`}>
             <LayoutDashboard />
             {dict.dashboard}
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link href={`/${lang}/dashboard#tickets`}>
+            <Ticket />
+            {dict.myTickets}
           </Link>
         </DropdownMenuItem>
         <DropdownMenuSeparator />

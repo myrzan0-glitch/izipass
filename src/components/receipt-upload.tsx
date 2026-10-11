@@ -32,12 +32,15 @@ type Phase = { name: "idle" } | { name: "uploading" } | { name: "reading"; perce
 
 type Props = {
   registrationId: string
+  /** Button text and style; defaults to the main "Upload receipt" call to action. */
+  label?: string
+  variant?: "default" | "outline"
   /** The organizer's auto-check add-on is on: read the receipt in the browser and send the text. */
   ocr: boolean
   dict: Dictionary
 }
 
-export function ReceiptUpload({ registrationId, ocr, dict }: Props) {
+export function ReceiptUpload({ registrationId, ocr, dict, label: idleLabel, variant = "default" }: Props) {
   const router = useRouter()
   const input = useRef<HTMLInputElement>(null)
   const [phase, setPhase] = useState<Phase>({ name: "idle" })
@@ -90,7 +93,7 @@ export function ReceiptUpload({ registrationId, ocr, dict }: Props) {
         ? fmt(t.reading, { n: phase.percent })
         : phase.name === "checking"
           ? t.checking
-          : t.uploadReceipt
+          : (idleLabel ?? t.uploadReceipt)
 
   return (
     <Field data-invalid={!!error}>
@@ -102,7 +105,7 @@ export function ReceiptUpload({ registrationId, ocr, dict }: Props) {
         onChange={(e) => upload(e.target.files?.[0])}
         disabled={busy}
       />
-      <Button type="button" size="lg" onClick={() => input.current?.click()} disabled={busy} aria-live="polite">
+      <Button type="button" size="lg" variant={variant} onClick={() => input.current?.click()} disabled={busy} aria-live="polite">
         <Upload />
         {label}
       </Button>

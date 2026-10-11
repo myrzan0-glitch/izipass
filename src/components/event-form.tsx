@@ -217,6 +217,8 @@ export function EventForm({ lang, event, organizerSlug, maxCapacity, action, dic
                   autoComplete="off"
                   value={price}
                   onChange={(e) => setPrice(groupDigits(e.target.value))}
+                  // Typing replaces the starting "0" instead of appending to it.
+                  onFocus={(e) => e.currentTarget.select()}
                   aria-invalid={!!err("priceUzs")}
                   required
                 />

@@ -20,6 +20,6 @@ export async function requireUser(lang: Locale, next = `/${lang}/dashboard`) {
 export async function requireOrganizer(lang: Locale, next?: string) {
   const user = await requireUser(lang, next)
   const organizer = await getOrganizerForUser(db(), user.id)
-  if (!organizer) redirect(`/${lang}/dashboard`)
+  if (!organizer) redirect(`/${lang}/dashboard/organizer/new`)
   return { user, organizer }
 }

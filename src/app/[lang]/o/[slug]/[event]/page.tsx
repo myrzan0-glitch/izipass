@@ -2,22 +2,29 @@ import { Suspense } from "react"
 import type { Metadata } from "next"
 import Link from "next/link"
 import { notFound } from "next/navigation"
-import { CalendarDays, MapPin, Users } from "lucide-react"
+import { CalendarDays, CircleCheck, MapPin, Users } from "lucide-react"
 
+import { AddToCalendar } from "@/components/add-to-calendar"
+import { RegistrationStatusBadge } from "@/components/registration-status"
 import { SiteHeader } from "@/components/site-header"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { PageSkeleton } from "@/components/page-skeleton"
+import { getSession } from "@/lib/auth/session"
+import { calendarEventFor, googleCalendarUrl } from "@/lib/calendar"
 import { db } from "@/lib/db"
+import { registrations } from "@/lib/db/schema"
 import { getPublicEvent } from "@/lib/events"
 import { activeCount, expireHolds } from "@/lib/registrations"
 import { isLocale } from "@/lib/i18n/config"
 import { getDictionary } from "@/lib/i18n/dictionaries"
 import { fmt } from "@/lib/i18n/format"
-import { formatDateTime, formatMoney } from "@/lib/time"
+import { SITE_URL } from "@/lib/site"
+import { formatDateRange, formatDateTime, formatMoney } from "@/lib/time"
 import { notifyLater } from "@/lib/telegram/notify"
+import { and, eq } from "drizzle-orm"
 
 export async function generateMetadata({ params }: PageProps<"/[lang]/o/[slug]/[event]">): Promise<Metadata> {
   const { lang, slug, event: eventSlug } = await params
@@ -44,9 +51,29 @@ async function EventPage({ params }: { params: PageProps<"/[lang]/o/[slug]/[even
   notifyLater({ eventId: event.id })
   const left = Math.max(0, event.capacity - (await activeCount(db(), event.id)))
   const open = event.status === "published" && event.startsAt > new Date()
+  // Someone already registered sees their place instead of a Register button.
+  const session = await getSession()
+  const [mine] = session
+    ? await db()
+        .select()
+        .from(registrations)
+        .where(and(eq(registrations.eventId, event.id), eq(registrations.userId, session.userId)))
+        .limit(1)
+    : []
+  const registered = mine && !["expired", "cancelled", "rejected"].includes(mine.status) ? mine : null
+  const registerHref = `/${lang}/o/${organizer.slug}/${event.slug}/register`
+  const price = event.priceUzs ? `${formatMoney(event.priceUzs, lang)} ${t.uzs}` : dict.event.free
+  const calendar = calendarEventFor(event, organizer, lang, SITE_URL)
+  const calendarButton = (
+    <AddToCalendar
+      googleUrl={googleCalendarUrl(calendar)}
+      icsUrl={`/api/events/${event.id}/calendar?lang=${lang}`}
+      dict={t}
+    />
+  )
 
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-10 px-4 py-6 sm:py-12">
+    <main className={`mx-auto flex w-full max-w-5xl flex-1 flex-col gap-10 px-4 py-6 sm:py-12 ${open && !registered ? "pb-28 lg:pb-12" : ""}`}>
       <SiteHeader lang={lang} dict={dict} />
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
       <article className="flex flex-col gap-6">
@@ -69,10 +96,7 @@ async function EventPage({ params }: { params: PageProps<"/[lang]/o/[slug]/[even
             <CalendarDays className="mt-0.5 size-4 text-muted-foreground" aria-hidden />
             <div>
               <dt className="sr-only">{dict.event.startsAt}</dt>
-              <dd>
-                {formatDateTime(event.startsAt, lang)}
-                {event.endsAt && ` — ${formatDateTime(event.endsAt, lang)}`}
-              </dd>
+              <dd>{formatDateRange(event.startsAt, event.endsAt, lang)}</dd>
             </div>
           </div>
           {event.venue && (
@@ -101,6 +125,8 @@ async function EventPage({ params }: { params: PageProps<"/[lang]/o/[slug]/[even
           </div>
         </dl>
 
+        {event.status !== "cancelled" && <div>{calendarButton}</div>}
+
         {event.description && <p className="whitespace-pre-line text-base leading-relaxed">{event.description}</p>}
       </article>
 
@@ -108,15 +134,26 @@ async function EventPage({ params }: { params: PageProps<"/[lang]/o/[slug]/[even
         <Card>
           <CardContent className="flex flex-col gap-4">
             <div className="flex items-baseline justify-between gap-4">
-              <span className="text-sm text-muted-foreground">{dict.event.price}</span>
-              <span className="text-xl font-semibold tabular-nums">
-                {event.priceUzs ? `${formatMoney(event.priceUzs, lang)} ${t.uzs}` : dict.event.free}
-              </span>
+              <span className="text-sm text-muted-foreground">{t.price}</span>
+              <span className="text-xl font-semibold tabular-nums">{price}</span>
             </div>
-            {open ? (
+            {registered ? (
+              <>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="flex items-center gap-2 font-medium">
+                    <CircleCheck className="size-4" aria-hidden />
+                    {t.registeredTitle}
+                  </span>
+                  <RegistrationStatusBadge status={registered.status} dict={dict.registrationStatus} />
+                </div>
+                <Button size="lg" asChild>
+                  <Link href={`/${lang}/r/${registered.id}`}>{t.openRegistration}</Link>
+                </Button>
+              </>
+            ) : open ? (
               <>
                 <Button size="lg" asChild>
-                  <Link href={`/${lang}/o/${organizer.slug}/${event.slug}/register`}>{left > 0 ? t.register : t.joinWaitlist}</Link>
+                  <Link href={registerHref}>{left > 0 ? t.register : t.joinWaitlist}</Link>
                 </Button>
                 {left === 0 && <p className="text-center text-xs text-muted-foreground">{t.fullHint}</p>}
               </>
@@ -129,6 +166,20 @@ async function EventPage({ params }: { params: PageProps<"/[lang]/o/[slug]/[even
         </Card>
       </aside>
       </div>
+      {open && !registered && (
+        /* Phones: price and Register stay in reach while reading. */
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80 lg:hidden">
+          <div className="mx-auto flex max-w-5xl items-center justify-between gap-4">
+            <div className="flex min-w-0 flex-col">
+              <span className="truncate font-semibold tabular-nums">{price}</span>
+              <span className="truncate text-xs text-muted-foreground">{left > 0 ? fmt(t.spotsLeft, { n: left, total: event.capacity }) : t.full}</span>
+            </div>
+            <Button size="lg" asChild>
+              <Link href={registerHref}>{left > 0 ? t.register : t.joinWaitlist}</Link>
+            </Button>
+          </div>
+        </div>
+      )}
     </main>
   )
 }

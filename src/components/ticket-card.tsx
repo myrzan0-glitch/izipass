@@ -13,10 +13,12 @@ type Props = {
   name: string
   reference: string
   dict: Dictionary
+  /** Extra actions under the wallet buttons (e.g. Add to calendar). */
+  children?: React.ReactNode
 }
 
 /** The confirmed attendee's ticket: QR for the door plus Wallet buttons. */
-export async function TicketCard({ lang, registrationId, qrValue, name, reference, dict }: Props) {
+export async function TicketCard({ lang, registrationId, qrValue, name, reference, dict, children }: Props) {
   const t = dict.ticket
   const svg = await qrSvg(qrValue, { type: "svg", margin: 1, errorCorrectionLevel: "M" })
   const src = `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`
@@ -52,6 +54,7 @@ export async function TicketCard({ lang, registrationId, qrValue, name, referenc
             </a>
           </Button>
         </div>
+        {children}
       </CardContent>
     </Card>
   )

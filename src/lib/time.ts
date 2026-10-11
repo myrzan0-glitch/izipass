@@ -53,3 +53,13 @@ export function startOfMonth(now = new Date()) {
   const ym = toLocalInput(now).slice(0, 7)
   return new Date(`${ym}-01T00:00:00${OFFSET}`)
 }
+
+/** "Thu 5 November at 19:00 – 21:00" on one day; two full dates otherwise. */
+export function formatDateRange(start: Date, end: Date | null, locale: Locale) {
+  if (!end) return formatDateTime(start, locale)
+  if (toLocalInput(start).slice(0, 10) === toLocalInput(end).slice(0, 10)) {
+    const time = new Intl.DateTimeFormat(INTL_LOCALE[locale], { timeZone: TIME_ZONE, hour: "2-digit", minute: "2-digit", hourCycle: "h23" })
+    return `${formatDateTime(start, locale)} – ${time.format(end)}`
+  }
+  return `${formatDateTime(start, locale)} – ${formatDateTime(end, locale)}`
+}
