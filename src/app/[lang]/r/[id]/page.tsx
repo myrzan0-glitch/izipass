@@ -9,6 +9,7 @@ import { PageSkeleton } from "@/components/page-skeleton"
 import { ReceiptUpload } from "@/components/receipt-upload"
 import { RegistrationStatusBadge } from "@/components/registration-status"
 import { SiteHeader } from "@/components/site-header"
+import { TicketCard } from "@/components/ticket-card"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -17,8 +18,10 @@ import { requireUser } from "@/lib/auth/current"
 import { db } from "@/lib/db"
 import { isLocale } from "@/lib/i18n/config"
 import { getDictionary } from "@/lib/i18n/dictionaries"
+import type { Dictionary } from "@/lib/i18n/dictionaries/en"
 import { fmt } from "@/lib/i18n/format"
 import { expireHolds, getRegistration } from "@/lib/registrations"
+import { ticketUrl } from "@/lib/tickets"
 import { formatDateTime, formatMoney } from "@/lib/time"
 
 export async function generateMetadata({ params }: PageProps<"/[lang]/r/[id]">): Promise<Metadata> {
@@ -27,9 +30,13 @@ export async function generateMetadata({ params }: PageProps<"/[lang]/r/[id]">):
   return { title: (await getDictionary(lang)).status.title, robots: { index: false } }
 }
 
-async function Content({ params }: { params: PageProps<"/[lang]/r/[id]">["params"] }) {
+type Props = { params: PageProps<"/[lang]/r/[id]">["params"]; searchParams: PageProps<"/[lang]/r/[id]">["searchParams"] }
+
+async function Content({ params, searchParams }: Props) {
   const { lang, id } = await params
   if (!isLocale(lang)) notFound()
+  const query = await searchParams
+  const walletError = typeof query.wallet === "string" ? query.wallet : null
   const dict = await getDictionary(lang)
   const user = await requireUser(lang, `/${lang}/r/${id}`)
   await expireHolds(db())
@@ -103,23 +110,23 @@ async function Content({ params }: { params: PageProps<"/[lang]/r/[id]">["params
         )}
 
         {reg.status === "confirmed" && (
-          <Card>
-            <CardHeader>
-              <CardTitle>{t.confirmedTitle}</CardTitle>
-              <CardDescription>{t.confirmedBody}</CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-2 text-sm">
-              <div className="flex items-center justify-between gap-4">
-                <span className="text-muted-foreground">{t.reference}</span>
-                <span className="font-mono font-semibold">{reg.referenceCode}</span>
-              </div>
-              <div className="flex items-center justify-between gap-4">
-                <span className="text-muted-foreground">{dict.register.name}</span>
-                <span>{reg.name}</span>
-              </div>
-              <p className="pt-2 text-xs text-muted-foreground">{t.walletSoon}</p>
-            </CardContent>
-          </Card>
+          <>
+            {walletError && (
+              <Alert variant="destructive">
+                <AlertDescription>
+                  {dict.errors[`wallet_${walletError}` as keyof Dictionary["errors"]] ?? dict.errors.generic}
+                </AlertDescription>
+              </Alert>
+            )}
+            <TicketCard
+              lang={lang}
+              registrationId={reg.id}
+              qrValue={ticketUrl(reg.id)}
+              name={reg.name}
+              reference={reg.referenceCode}
+              dict={dict}
+            />
+          </>
         )}
 
         {reg.status === "waitlist" && (
@@ -173,10 +180,10 @@ async function Content({ params }: { params: PageProps<"/[lang]/r/[id]">["params
   )
 }
 
-export default function Page({ params }: PageProps<"/[lang]/r/[id]">) {
+export default function Page({ params, searchParams }: PageProps<"/[lang]/r/[id]">) {
   return (
     <Suspense fallback={<PageSkeleton />}>
-      <Content params={params} />
+      <Content params={params} searchParams={searchParams} />
     </Suspense>
   )
 }
