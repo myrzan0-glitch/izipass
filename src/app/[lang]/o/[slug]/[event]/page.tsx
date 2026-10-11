@@ -12,6 +12,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { PageSkeleton } from "@/components/page-skeleton"
 import { db } from "@/lib/db"
 import { getPublicEvent } from "@/lib/events"
+import { activeCount, expireHolds } from "@/lib/registrations"
 import { isLocale } from "@/lib/i18n/config"
 import { getDictionary } from "@/lib/i18n/dictionaries"
 import { fmt } from "@/lib/i18n/format"
@@ -38,6 +39,9 @@ async function EventPage({ params }: { params: PageProps<"/[lang]/o/[slug]/[even
   if (!row) notFound()
   const { event, organizer } = row
   const t = dict.public
+  await expireHolds(db(), event.id)
+  const left = Math.max(0, event.capacity - (await activeCount(db(), event.id)))
+  const open = event.status === "published" && event.startsAt > new Date()
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-10 px-4 py-6 sm:py-12">
@@ -90,7 +94,7 @@ async function EventPage({ params }: { params: PageProps<"/[lang]/o/[slug]/[even
             <Users className="mt-0.5 size-4 text-muted-foreground" aria-hidden />
             <div>
               <dt className="sr-only">{dict.event.capacity}</dt>
-              <dd>{fmt(t.spots, { n: event.capacity })}</dd>
+              <dd>{left > 0 ? fmt(t.spotsLeft, { n: left, total: event.capacity }) : t.full}</dd>
             </div>
           </div>
         </dl>
@@ -107,16 +111,16 @@ async function EventPage({ params }: { params: PageProps<"/[lang]/o/[slug]/[even
                 {event.priceUzs ? `${formatMoney(event.priceUzs, lang)} ${t.uzs}` : dict.event.free}
               </span>
             </div>
-            {event.status === "published" ? (
+            {open ? (
               <>
-                <Button size="lg" disabled>
-                  {t.register}
+                <Button size="lg" asChild>
+                  <Link href={`/${lang}/o/${organizer.slug}/${event.slug}/register`}>{left > 0 ? t.register : t.joinWaitlist}</Link>
                 </Button>
-                <p className="text-center text-xs text-muted-foreground">{t.registrationSoon}</p>
+                {left === 0 && <p className="text-center text-xs text-muted-foreground">{t.fullHint}</p>}
               </>
             ) : (
-              <Badge variant="destructive" className="w-fit">
-                {dict.event.status.cancelled}
+              <Badge variant={event.status === "cancelled" ? "destructive" : "outline"} className="w-fit">
+                {event.status === "cancelled" ? dict.event.status.cancelled : t.ended}
               </Badge>
             )}
           </CardContent>

@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm"
-import { boolean, index, integer, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core"
+import { boolean, customType, index, integer, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core"
 
 const id = () => uuid("id").primaryKey().defaultRandom()
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
@@ -108,6 +108,75 @@ export const events = pgTable(
   (t) => [uniqueIndex("events_organizer_slug_idx").on(t.organizerId, t.slug), index("events_starts_idx").on(t.startsAt)],
 )
 
+export const registrationStatusEnum = pgEnum("registration_status", [
+  "held",
+  "proof_sent",
+  "confirmed",
+  "rejected",
+  "expired",
+  "cancelled",
+  "waitlist",
+])
+
+/**
+ * One person's place at an event.
+ * held → proof_sent → confirmed | rejected; held → expired; waitlist → held when a spot frees.
+ */
+export const registrations = pgTable(
+  "registrations",
+  {
+    id: id(),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => events.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    phone: text("phone").notNull().default(""),
+    note: text("note").notNull().default(""),
+    status: registrationStatusEnum("status").notNull().default("held"),
+    /** Shown to the attendee and expected in the transfer comment, e.g. ESC-4821. */
+    referenceCode: text("reference_code").notNull(),
+    holdExpiresAt: timestamp("hold_expires_at", { withTimezone: true }),
+    /** Why the organizer rejected it (shown to the attendee). */
+    rejectReason: text("reject_reason"),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+    decidedBy: uuid("decided_by").references(() => users.id, { onDelete: "set null" }),
+    checkedInAt: timestamp("checked_in_at", { withTimezone: true }),
+    checkedInBy: uuid("checked_in_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: createdAt(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("registrations_event_user_idx").on(t.eventId, t.userId),
+    uniqueIndex("registrations_event_code_idx").on(t.eventId, t.referenceCode),
+    index("registrations_user_idx").on(t.userId),
+    index("registrations_hold_idx").on(t.holdExpiresAt),
+  ],
+)
+
+// postgres-js returns Buffer, PGlite returns Uint8Array: normalize to Buffer.
+const bytea = customType<{ data: Buffer; driverData: Uint8Array }>({
+  dataType: () => "bytea",
+  fromDriver: (value) => Buffer.from(value),
+})
+
+/** Receipt screenshots: small JPEGs, kept in Postgres and deleted 30 days after the event. */
+export const receipts = pgTable(
+  "receipts",
+  {
+    id: id(),
+    registrationId: uuid("registration_id")
+      .notNull()
+      .references(() => registrations.id, { onDelete: "cascade" }),
+    contentType: text("content_type").notNull(),
+    data: bytea("data").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("receipts_registration_idx").on(t.registrationId)],
+)
+
 export const PLAN_LIMITS = {
   free: { eventsPerMonth: 2, participantsPerEvent: 20, priceUzs: 0 },
   pro: { eventsPerMonth: 10, participantsPerEvent: 100, priceUzs: 299_000 },
@@ -119,5 +188,7 @@ export const AUTO_CHECK_PRICE_UZS = 500
 export type User = typeof users.$inferSelect
 export type Organizer = typeof organizers.$inferSelect
 export type Event = typeof events.$inferSelect
+export type Registration = typeof registrations.$inferSelect
+export type RegistrationStatus = Registration["status"]
 export type EventStatus = Event["status"]
 export type Plan = Organizer["plan"]

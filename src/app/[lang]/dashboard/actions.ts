@@ -4,9 +4,10 @@ import { redirect } from "next/navigation"
 
 import { getSession } from "@/lib/auth/session"
 import { db } from "@/lib/db"
-import { PlanLimitError, createEvent, setEventStatus, updateEvent } from "@/lib/events"
+import { PlanLimitError, createEvent, getEvent, setEventStatus, updateEvent } from "@/lib/events"
 import { DEFAULT_LOCALE, isLocale } from "@/lib/i18n/config"
 import { SlugTakenError, createOrganizer, getOrganizerForUser, updateOrganizer } from "@/lib/organizers"
+import { RegistrationError, decide } from "@/lib/registrations"
 import { fromLocalInput } from "@/lib/time"
 import { eventSchema, fieldErrors, organizerSchema } from "@/lib/validation"
 
@@ -113,4 +114,24 @@ export async function setEventStatusAction(form: FormData) {
   const eventId = str(form, "eventId")
   await setEventStatus(db(), organizer.id, eventId, status)
   redirect(`/${lang}/dashboard/events/${eventId}`)
+}
+
+/** Organizer approves or rejects a registration of one of their events. */
+export async function decideRegistrationAction(form: FormData) {
+  const lang = langOf(form)
+  const userId = await currentUserId()
+  const organizer = await getOrganizerForUser(db(), userId)
+  if (!organizer) redirect(`/${lang}/dashboard`)
+  const eventId = str(form, "eventId")
+  const decision = str(form, "decision")
+  if (decision !== "confirmed" && decision !== "rejected") return
+  // Only events of this organizer: `decide` matches on eventId, and the event must belong to them.
+  const event = await getEvent(db(), organizer.id, eventId)
+  if (!event) redirect(`/${lang}/dashboard`)
+  try {
+    await decide(db(), event.id, str(form, "registrationId"), decision, userId, str(form, "reason").slice(0, 200))
+  } catch (error) {
+    if (!(error instanceof RegistrationError)) throw error
+  }
+  redirect(`/${lang}/dashboard/events/${eventId}/registrations`)
 }
