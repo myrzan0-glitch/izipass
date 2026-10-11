@@ -9,6 +9,7 @@ import { ConfirmAction } from "@/components/confirm-action"
 import { DashboardShell } from "@/components/dashboard-shell"
 import { EventForm } from "@/components/event-form"
 import { EventStatusBadge } from "@/components/event-status"
+import { ImageField } from "@/components/image-field"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -130,6 +131,12 @@ async function Content({ params, searchParams }: PageProps<"/[lang]/dashboard/ev
             <ShareLink url={`${SITE_URL}${publicUrl}`} title={event.title} dict={dict.share} />
           </CardContent>
         )}
+      </Card>
+
+      <Card className="max-w-2xl">
+        <CardContent>
+          <ImageField endpoint={`/api/events/${event.id}/cover`} url={event.coverUrl} shape="wide" label={t.cover} hint={t.coverHint} dict={dict} />
+        </CardContent>
       </Card>
 
       <Card className="max-w-2xl">

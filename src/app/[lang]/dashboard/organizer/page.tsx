@@ -6,12 +6,14 @@ import { CircleCheck } from "lucide-react"
 
 import { saveOrganizerAction, savePaymentSettingsAction } from "@/app/[lang]/dashboard/actions"
 import { DashboardShell } from "@/components/dashboard-shell"
+import { ImageField } from "@/components/image-field"
 import { OrganizerForm } from "@/components/organizer-form"
 import { PageSkeleton } from "@/components/page-skeleton"
 import { PaymentSettingsForm } from "@/components/payment-settings-form"
 import { TelegramStatus } from "@/components/telegram-status"
 import { Alert, AlertTitle } from "@/components/ui/alert"
 import { Card, CardContent } from "@/components/ui/card"
+import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { requireOrganizer } from "@/lib/auth/current"
@@ -59,7 +61,17 @@ async function Content({ params, searchParams }: PageProps<"/[lang]/dashboard/or
         )}
         <TabsContent value="profile">
           <Card>
-            <CardContent>
+            <CardContent className="flex flex-col gap-6">
+              <ImageField
+                endpoint="/api/organizer/logo"
+                url={organizer.logoUrl}
+                shape="square"
+                label={t.logo}
+                hint={t.logoHint}
+                fallback={organizer.name.slice(0, 1).toUpperCase()}
+                dict={dict}
+              />
+              <Separator />
               <OrganizerForm lang={lang} organizer={organizer} action={saveOrganizerAction} dict={dict} />
             </CardContent>
           </Card>

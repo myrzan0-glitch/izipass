@@ -203,6 +203,24 @@ export const receipts = pgTable(
   ],
 )
 
+export const imageKindEnum = pgEnum("image_kind", ["logo", "cover"])
+
+/** Organizer logos and event covers: small, resized in the browser, public. */
+export const images = pgTable(
+  "images",
+  {
+    id: id(),
+    organizerId: uuid("organizer_id")
+      .notNull()
+      .references(() => organizers.id, { onDelete: "cascade" }),
+    kind: imageKindEnum("kind").notNull(),
+    contentType: text("content_type").notNull(),
+    data: bytea("data").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("images_organizer_idx").on(t.organizerId)],
+)
+
 export const PLAN_LIMITS = {
   free: { eventsPerMonth: 2, participantsPerEvent: 20, priceUzs: 0 },
   pro: { eventsPerMonth: 10, participantsPerEvent: 100, priceUzs: 299_000 },

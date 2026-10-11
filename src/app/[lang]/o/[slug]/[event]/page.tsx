@@ -7,6 +7,7 @@ import { CalendarDays, CircleCheck, MapPin, Users } from "lucide-react"
 import { AddToCalendar } from "@/components/add-to-calendar"
 import { RegistrationStatusBadge } from "@/components/registration-status"
 import { SiteHeader } from "@/components/site-header"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -22,6 +23,7 @@ import { isLocale } from "@/lib/i18n/config"
 import { getDictionary } from "@/lib/i18n/dictionaries"
 import { fmt } from "@/lib/i18n/format"
 import { SITE_URL } from "@/lib/site"
+import { absoluteImageUrl } from "@/lib/images"
 import { formatDateRange, formatDateTime, formatMoney } from "@/lib/time"
 import { notifyLater } from "@/lib/telegram/notify"
 import { and, eq } from "drizzle-orm"
@@ -31,11 +33,12 @@ export async function generateMetadata({ params }: PageProps<"/[lang]/o/[slug]/[
   if (!isLocale(lang)) return {}
   const row = await getPublicEvent(db(), slug, eventSlug)
   if (!row) return {}
+  const image = absoluteImageUrl(row.event.coverUrl ?? row.organizer.logoUrl, SITE_URL)
   const description = `${formatDateTime(row.event.startsAt, lang)}${row.event.venue ? ` · ${row.event.venue}` : ""}`
   return {
     title: `${row.event.title} · ${row.organizer.name}`,
     description,
-    openGraph: { title: row.event.title, description, ...(row.event.coverUrl ? { images: [row.event.coverUrl] } : {}) },
+    openGraph: { title: row.event.title, description, ...(image ? { images: [image] } : {}) },
   }
 }
 
@@ -77,8 +80,16 @@ async function EventPage({ params }: { params: PageProps<"/[lang]/o/[slug]/[even
       <SiteHeader lang={lang} dict={dict} />
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
       <article className="flex flex-col gap-6">
+        {event.coverUrl && (
+          // eslint-disable-next-line @next/next/no-img-element -- our own resized image
+          <img src={event.coverUrl} alt="" className="aspect-video w-full rounded-xl border object-cover" />
+        )}
         <div className="flex flex-col gap-2">
-          <Link href={`/${lang}/o/${organizer.slug}`} className="text-sm text-muted-foreground hover:underline">
+          <Link href={`/${lang}/o/${organizer.slug}`} className="flex w-fit items-center gap-2 text-sm text-muted-foreground hover:underline">
+            <Avatar className="size-6 rounded-md">
+              {organizer.logoUrl && <AvatarImage src={organizer.logoUrl} alt="" className="object-cover" />}
+              <AvatarFallback className="rounded-md text-xs">{organizer.name.slice(0, 1).toUpperCase()}</AvatarFallback>
+            </Avatar>
             {organizer.name}
           </Link>
           <h1 className="text-3xl font-semibold tracking-tight text-balance sm:text-4xl">{event.title}</h1>
