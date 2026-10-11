@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm"
-import { boolean, index, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core"
+import { boolean, index, integer, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core"
 
 const id = () => uuid("id").primaryKey().defaultRandom()
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
@@ -77,6 +77,37 @@ export const organizerMembers = pgTable(
   (t) => [uniqueIndex("organizer_members_pk").on(t.organizerId, t.userId), index("organizer_members_user_idx").on(t.userId)],
 )
 
+export const eventStatusEnum = pgEnum("event_status", ["draft", "published", "cancelled"])
+
+export const events = pgTable(
+  "events",
+  {
+    id: id(),
+    organizerId: uuid("organizer_id")
+      .notNull()
+      .references(() => organizers.id, { onDelete: "cascade" }),
+    slug: text("slug").notNull(),
+    title: text("title").notNull(),
+    description: text("description").notNull().default(""),
+    coverUrl: text("cover_url"),
+    startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+    endsAt: timestamp("ends_at", { withTimezone: true }),
+    venue: text("venue").notNull().default(""),
+    venueUrl: text("venue_url"),
+    capacity: integer("capacity").notNull(),
+    /** 0 = free event. */
+    priceUzs: integer("price_uzs").notNull().default(0),
+    /** Shown to attendees after registering: Click/Payme link, card number. */
+    paymentInstructions: text("payment_instructions").notNull().default(""),
+    /** How long a spot is held while the attendee pays. */
+    holdMinutes: integer("hold_minutes").notNull().default(30),
+    status: eventStatusEnum("status").notNull().default("draft"),
+    createdAt: createdAt(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("events_organizer_slug_idx").on(t.organizerId, t.slug), index("events_starts_idx").on(t.startsAt)],
+)
+
 export const PLAN_LIMITS = {
   free: { eventsPerMonth: 2, participantsPerEvent: 20, priceUzs: 0 },
   pro: { eventsPerMonth: 10, participantsPerEvent: 100, priceUzs: 299_000 },
@@ -87,3 +118,6 @@ export const AUTO_CHECK_PRICE_UZS = 500
 
 export type User = typeof users.$inferSelect
 export type Organizer = typeof organizers.$inferSelect
+export type Event = typeof events.$inferSelect
+export type EventStatus = Event["status"]
+export type Plan = Organizer["plan"]
