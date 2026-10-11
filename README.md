@@ -1,0 +1,48 @@
+# izipass
+
+Paid events for Uzbekistan: registration with a limit, payment confirmation by receipt, tickets in Apple Wallet and Google Wallet, door check-in by scan. The plan is in `docs/plan.md`.
+
+izipass never holds money: attendees pay the organizer directly. Pass signing is done by the wallet project (`wallet.myrzan.com`) through its API, so Apple and Google credentials live only there.
+
+## Stack
+
+- Next.js 16 (App Router), shadcn/ui, Tailwind CSS v4. UI is built from shadcn components and tokens only.
+- Postgres (Neon) with Drizzle ORM; migrations in `drizzle/`, applied on build.
+- Sign-in with Telegram (Login Widget) or email (one-time link via Resend). Sessions are signed cookies (JWT, 30 days).
+- Languages: uz / ru / kk / en, locale in the URL (`/ru/...`).
+
+## Develop
+
+```bash
+npm install
+cp .env.example .env.local   # at least DATABASE_URL and SESSION_SECRET
+npm run db:migrate           # applies drizzle/ to DATABASE_URL
+npm run dev                  # http://localhost:3000
+```
+
+Without `RESEND_API_KEY` the email sign-in link is printed to the dev console. Without `TELEGRAM_BOT_TOKEN` the Telegram button is hidden.
+
+Checks: `npm run typecheck`, `npm run lint`, `npm test` (tests run the real schema on an in-memory Postgres), `npm run build`.
+
+Schema changes: edit `src/lib/db/schema.ts`, then `npm run db:generate` and commit the new file in `drizzle/`.
+
+## Layout
+
+```
+src/app/[lang]/              landing, login, dashboard (locale from the URL; proxy.ts redirects / and guards /dashboard)
+src/app/api/auth/            telegram, email, email/verify, logout
+src/lib/auth/                session cookie, Telegram verification, login tokens, user data access
+src/lib/db/                  Drizzle schema + client
+src/lib/i18n/                dictionaries
+docs/plan.md                 product plan and decisions
+```
+
+## Deploy (Vercel)
+
+1. Import the repo, framework Next.js. Domain: `izipass.myrzan.com`.
+2. Storage → create **Neon Postgres** and connect it (`DATABASE_URL`).
+3. Env vars from `.env.example`: `SESSION_SECRET`, `TELEGRAM_BOT_TOKEN`, `NEXT_PUBLIC_TELEGRAM_BOT`, `RESEND_API_KEY`, `EMAIL_FROM`.
+4. In @BotFather: `/setdomain` → `izipass.myrzan.com` for the bot.
+5. In Resend: verify the sending domain for `EMAIL_FROM`.
+
+The build runs migrations before `next build`.
