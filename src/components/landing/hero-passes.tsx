@@ -19,11 +19,11 @@ const WIDE: Slot[] = [
   { pass: 4, x: 1045, y: 460, rot: -7, w: 150, qr: false, z: 0 },
   { pass: 5, x: 1156, y: 660, rot: 5, w: 168, qr: true, z: 0 },
 ]
-/** Narrower screens get a band of passes above the headline: three on phones (390 wide)... */
+/** Narrower screens get a band of passes above the headline: three side by side on phones (390 wide)... */
 const PHONE: Slot[] = [
-  { pass: 0, x: 86, y: 70, rot: -10, w: 136, qr: false, z: 0 },
-  { pass: 3, x: 195, y: 118, rot: 2, w: 138, qr: true, z: 2 },
-  { pass: 2, x: 310, y: 62, rot: 11, w: 128, qr: false, z: 1 },
+  { pass: 0, x: 72, y: 80, rot: -9, w: 120, qr: false, z: 0 },
+  { pass: 3, x: 195, y: 112, rot: 2, w: 128, qr: true, z: 2 },
+  { pass: 2, x: 318, y: 76, rot: 9, w: 120, qr: false, z: 1 },
 ]
 /** ...and five on tablets and small laptops (x as a share of the width). */
 const TABLET: Slot[] = [
@@ -39,9 +39,13 @@ function layout(width: number): Slot[] {
     const k = Math.min(width / 1280, 1.25)
     return WIDE.map((s) => ({ ...s, x: width / 2 + (s.x - 640) * k }))
   }
-  if (width >= 640) return TABLET.map((s) => ({ ...s, x: s.x * width }))
-  const k = width / 390
-  return PHONE.map((s) => ({ ...s, x: s.x * k }))
+  if (width >= 640) {
+    // Keep neighbours from covering each other on small tablets.
+    const k = Math.min(1, (width * 0.19) / 150)
+    return TABLET.map((s) => ({ ...s, x: s.x * width, w: Math.round(s.w * k) }))
+  }
+  const k = Math.min(Math.max(width / 390, 0.85), 1.15)
+  return PHONE.map((s) => ({ ...s, x: width / 2 + (s.x - 195) * k, w: Math.round(s.w * k) }))
 }
 
 let measuring: CanvasRenderingContext2D | null = null
@@ -56,27 +60,37 @@ function drawPass(
   colors: { bg: string; text: string; qrBg: string; qrFg: string },
   font: string
 ) {
-  const pad = 14
+  const pad = slot.w < 140 ? 12 : 14
   const inner = slot.w - pad * 2
-  const lines = (text: string, size: number, weight: number, max: number) => {
+  /**
+   * Wraps text to at most two lines, breaking at spaces and after hyphens, and makes the
+   * font smaller until every line fits the card.
+   */
+  const fit = (text: string, size: number, weight: number, min: number) => {
     const c = ctx ?? measure()
-    c.font = `${weight} ${size}px ${font}`
-    const out: string[] = []
-    let line = ""
-    for (const word of text.split(" ")) {
-      const next = line ? `${line} ${word}` : word
-      if (line && c.measureText(next).width > max) {
-        out.push(line)
-        line = word
-      } else line = next
+    const words = text.split(" ").flatMap((word) => word.split(/(?<=-)/))
+    for (; ; size--) {
+      c.font = `${weight} ${size}px ${font}`
+      const out: string[] = []
+      let line = ""
+      for (const word of words) {
+        const next = !line ? word : line.endsWith("-") ? line + word : `${line} ${word}`
+        if (line && c.measureText(next).width > inner) {
+          out.push(line)
+          line = word
+        } else line = next
+      }
+      if (line) out.push(line)
+      const fits = out.length <= 2 && out.every((l) => c.measureText(l).width <= inner)
+      if (fits || size <= min) return { lines: out.slice(0, 2), size, lead: Math.round(size * 1.2) }
     }
-    if (line) out.push(line)
-    return out.slice(0, 2)
   }
-  const org = lines(pass.org.toUpperCase(), 10, 600, inner)
-  const title = lines(pass.title, 16, 600, inner)
-  const meta = lines(pass.meta, 11, 400, inner)
-  const height = pad * 2 + org.length * 13 + 6 + title.length * 19 + 6 + meta.length * 14 + (slot.qr ? 10 + 68 : 0)
+  const org = fit(pass.org.toUpperCase(), 10, 600, 8)
+  const title = fit(pass.title, 16, 600, 12)
+  const meta = fit(pass.meta, 11, 400, 9)
+  const qrSize = Math.min(68, inner)
+  const height =
+    pad * 2 + org.lines.length * org.lead + 6 + title.lines.length * title.lead + 6 + meta.lines.length * meta.lead + (slot.qr ? 10 + qrSize : 0)
   if (!ctx) return height
 
   ctx.save()
@@ -92,38 +106,32 @@ function drawPass(
   ctx.fillStyle = colors.text
   ctx.textBaseline = "top"
   let y = pad
-  ctx.globalAlpha = 0.85
-  ctx.font = `600 10px ${font}`
-  if ("letterSpacing" in ctx) ctx.letterSpacing = "0.8px"
-  for (const l of org) {
-    ctx.fillText(l, pad, y)
-    y += 13
+  const write = (block: ReturnType<typeof fit>, weight: number, alpha: number, spacing = "0px") => {
+    ctx.globalAlpha = alpha
+    ctx.font = `${weight} ${block.size}px ${font}`
+    if ("letterSpacing" in ctx) ctx.letterSpacing = spacing
+    for (const l of block.lines) {
+      ctx.fillText(l, pad, y)
+      y += block.lead
+    }
+    if ("letterSpacing" in ctx) ctx.letterSpacing = "0px"
+    ctx.globalAlpha = 1
   }
-  if ("letterSpacing" in ctx) ctx.letterSpacing = "0px"
+  write(org, 600, 0.85, "0.8px")
   y += 6
-  ctx.globalAlpha = 1
-  ctx.font = `600 16px ${font}`
-  for (const l of title) {
-    ctx.fillText(l, pad, y)
-    y += 19
-  }
+  write(title, 600, 1)
   y += 6
-  ctx.globalAlpha = 0.85
-  ctx.font = `400 11px ${font}`
-  for (const l of meta) {
-    ctx.fillText(l, pad, y)
-    y += 14
-  }
-  ctx.globalAlpha = 1
+  write(meta, 400, 0.85)
   if (slot.qr) {
     y += 10
+    const inset = qrSize * 0.09
     ctx.fillStyle = colors.qrBg
     ctx.beginPath()
-    ctx.roundRect(pad, y, 68, 68, 8)
+    ctx.roundRect(pad, y, qrSize, qrSize, 8)
     ctx.fill()
     ctx.save()
-    ctx.translate(pad + 6, y + 6)
-    ctx.scale(56 / qr.size, 56 / qr.size)
+    ctx.translate(pad + inset, y + inset)
+    ctx.scale((qrSize - inset * 2) / qr.size, (qrSize - inset * 2) / qr.size)
     ctx.fillStyle = colors.qrFg
     ctx.fill(new Path2D(qr.d))
     ctx.restore()
@@ -218,7 +226,9 @@ export function HeroPasses({ passes, qr }: { passes: PassData[]; qr: QrPath }) {
         const w = container.clientWidth
         const h = container.clientHeight
         if (!w || !h) return
-        const rebuild = layout(w).length !== layout(width).length
+        // Card textures are drawn for one width, so redraw when the slots change size.
+        const before = layout(width)
+        const rebuild = layout(w).some((slot, i) => slot.w !== before[i]?.w) || layout(w).length !== before.length
         width = w
         height = h
         renderer.setSize(w, h, false)
