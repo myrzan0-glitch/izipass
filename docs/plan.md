@@ -131,7 +131,7 @@ Every receipt keeps the OCR text, the parsed fields, the verdict and the checks,
 | Auth | Telegram Login Widget (signed data) + email magic links (Resend). Sessions in signed cookies |
 | Files | Vercel Blob: covers (public), receipts (private, deleted 30 days after the event) |
 | Receipt reading | Anthropic SDK, structured output |
-| Telegram bot | Webhook route; approve/reject buttons; ticket delivery |
+| Telegram bot | Webhook route (registered on production builds); receipt photo + approve/reject buttons for organizers; ticket, rejection, waitlist and expiry messages for attendees |
 | Email | Resend: magic links, confirmations, tickets |
 | Jobs | Vercel Cron: expire holds, promote waitlist, reminders, delete old receipts |
 | Rate limits, counters | Upstash Redis |

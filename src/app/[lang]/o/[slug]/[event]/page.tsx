@@ -17,6 +17,7 @@ import { isLocale } from "@/lib/i18n/config"
 import { getDictionary } from "@/lib/i18n/dictionaries"
 import { fmt } from "@/lib/i18n/format"
 import { formatDateTime, formatMoney } from "@/lib/time"
+import { notifyLater } from "@/lib/telegram/notify"
 
 export async function generateMetadata({ params }: PageProps<"/[lang]/o/[slug]/[event]">): Promise<Metadata> {
   const { lang, slug, event: eventSlug } = await params
@@ -40,6 +41,7 @@ async function EventPage({ params }: { params: PageProps<"/[lang]/o/[slug]/[even
   const { event, organizer } = row
   const t = dict.public
   await expireHolds(db(), event.id)
+  notifyLater({ eventId: event.id })
   const left = Math.max(0, event.capacity - (await activeCount(db(), event.id)))
   const open = event.status === "published" && event.startsAt > new Date()
 

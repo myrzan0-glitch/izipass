@@ -97,6 +97,7 @@ export async function register(db: Db, event: Event, organizerSlug: string, user
     phone: input.phone,
     note: input.note,
     status,
+    notifiedStatus: status,
     holdExpiresAt: full ? null : deadline,
     rejectReason: null,
     decidedAt: null,
@@ -204,7 +205,7 @@ export async function attachReceipt(db: Db, registrationId: string, contentType:
   const [receipt] = await db.insert(receipts).values({ registrationId, contentType, data, sha256 }).returning({ id: receipts.id })
   const [updated] = await db
     .update(registrations)
-    .set({ status: "proof_sent", holdExpiresAt: null, rejectReason: null, updatedAt: now })
+    .set({ status: "proof_sent", notifiedStatus: "proof_sent", holdExpiresAt: null, rejectReason: null, updatedAt: now })
     .where(eq(registrations.id, registrationId))
     .returning()
   return { registration: updated, receiptId: receipt.id }
@@ -336,7 +337,7 @@ export async function decide(
 export async function cancelRegistration(db: Db, registrationId: string, userId: string, now = new Date()) {
   const [updated] = await db
     .update(registrations)
-    .set({ status: "cancelled", holdExpiresAt: null, updatedAt: now })
+    .set({ status: "cancelled", notifiedStatus: "cancelled", holdExpiresAt: null, updatedAt: now })
     .where(
       and(
         eq(registrations.id, registrationId),

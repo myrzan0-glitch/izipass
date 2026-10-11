@@ -23,6 +23,7 @@ import { fmt } from "@/lib/i18n/format"
 import { expireHolds, getRegistration } from "@/lib/registrations"
 import { ticketUrl } from "@/lib/tickets"
 import { formatDateTime, formatMoney } from "@/lib/time"
+import { notifyLater } from "@/lib/telegram/notify"
 
 export async function generateMetadata({ params }: PageProps<"/[lang]/r/[id]">): Promise<Metadata> {
   const { lang } = await params
@@ -40,6 +41,7 @@ async function Content({ params, searchParams }: Props) {
   const dict = await getDictionary(lang)
   const user = await requireUser(lang, `/${lang}/r/${id}`)
   await expireHolds(db())
+  notifyLater({ eventId: null })
   const row = await getRegistration(db(), id)
   if (!row || row.registration.userId !== user.id) notFound()
   const { registration: reg, event, organizer } = row

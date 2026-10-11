@@ -1,6 +1,7 @@
 import { getSession } from "@/lib/auth/session"
 import { db } from "@/lib/db"
 import { RegistrationError, getReceipt, recordReceiptText } from "@/lib/registrations"
+import { notifyLater } from "@/lib/telegram/notify"
 
 const MAX_CHARS = 20_000
 
@@ -23,6 +24,7 @@ export async function POST(request: Request, { params }: RouteContext<"/api/rece
 
   try {
     const result = await recordReceiptText(db(), id, text)
+    notifyLater({ receiptId: id, eventId: row.registration.eventId })
     return Response.json(result ?? { verdict: null, status: row.registration.status })
   } catch (error) {
     if (error instanceof RegistrationError) return Response.json({ error: `registration_${error.code}` }, { status: 409 })

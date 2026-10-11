@@ -149,6 +149,11 @@ export const registrations = pgTable(
     decidedBy: uuid("decided_by").references(() => users.id, { onDelete: "set null" }),
     checkedInAt: timestamp("checked_in_at", { withTimezone: true }),
     checkedInBy: uuid("checked_in_by").references(() => users.id, { onDelete: "set null" }),
+    /**
+     * The last status the attendee knows about: set when they act themselves,
+     * and when a Telegram message tells them. A difference means "tell them".
+     */
+    notifiedStatus: registrationStatusEnum("notified_status"),
     createdAt: createdAt(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -188,6 +193,8 @@ export const receipts = pgTable(
     verdict: text("verdict").$type<Verdict>(),
     checks: jsonb("checks").$type<Checks>(),
     checkedAt: timestamp("checked_at", { withTimezone: true }),
+    /** When the organizers were told about this receipt (claimed once, so they hear about it once). */
+    notifiedAt: timestamp("notified_at", { withTimezone: true }),
   },
   (t) => [
     index("receipts_registration_idx").on(t.registrationId),

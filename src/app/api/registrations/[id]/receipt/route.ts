@@ -1,8 +1,14 @@
 import { getSession } from "@/lib/auth/session"
 import { db } from "@/lib/db"
 import { RegistrationError, attachReceipt, getRegistration } from "@/lib/registrations"
+import { notifyLater } from "@/lib/telegram/notify"
 
 const MAX_BYTES = 2 * 1024 * 1024
+/** With auto-check on, the browser sends the OCR text within seconds; the organizers hear about it then. */
+const AUTO_CHECK_GRACE_MS = 40_000
+
+// Long enough for the delayed organizer notification below.
+export const maxDuration = 60
 const TYPES = new Set(["image/jpeg", "image/png", "image/webp"])
 
 /** Attendee uploads the receipt screenshot for their own registration. */
@@ -20,6 +26,7 @@ export async function POST(request: Request, { params }: RouteContext<"/api/regi
 
   try {
     const { registration, receiptId } = await attachReceipt(db(), id, file.type, Buffer.from(await file.arrayBuffer()))
+    notifyLater({ receiptId, delayMs: row.organizer.autoCheck && row.event.priceUzs > 0 ? AUTO_CHECK_GRACE_MS : 0 })
     return Response.json({ status: registration.status, receiptId })
   } catch (error) {
     if (error instanceof RegistrationError) return Response.json({ error: `registration_${error.code}` }, { status: 409 })

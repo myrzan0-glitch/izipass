@@ -2,6 +2,9 @@ import { timingSafeEqual } from "node:crypto"
 
 import { db } from "@/lib/db"
 import { expireHolds, purgeOldReceipts } from "@/lib/registrations"
+import { SITE_URL } from "@/lib/site"
+import { telegramApiFromEnv } from "@/lib/telegram/api"
+import { notifyAttendees, notifyPendingReceipts } from "@/lib/telegram/bot"
 
 /**
  * Daily housekeeping at 02:00 Tashkent (vercel.json; Hobby plans allow one
@@ -17,5 +20,12 @@ export async function GET(request: Request) {
   }
   const expired = await expireHolds(db())
   const purged = await purgeOldReceipts(db())
-  return Response.json({ expired, purged })
+  const api = telegramApiFromEnv()
+  let messaged = 0
+  if (api) {
+    const ctx = { db: db(), api, siteUrl: SITE_URL }
+    messaged += await notifyPendingReceipts(ctx, new Date(Date.now() - 10 * 60_000))
+    messaged += await notifyAttendees(ctx, undefined, 500)
+  }
+  return Response.json({ expired, purged, messaged })
 }

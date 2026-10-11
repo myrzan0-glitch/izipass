@@ -10,6 +10,7 @@ import { SlugTakenError, createOrganizer, getOrganizerForUser, updateOrganizer }
 import { RegistrationError, decide } from "@/lib/registrations"
 import { fromLocalInput } from "@/lib/time"
 import { eventSchema, fieldErrors, organizerSchema } from "@/lib/validation"
+import { notifyLater } from "@/lib/telegram/notify"
 
 /** Field → error key (under `errors` in the dictionary). `form` is a general error. */
 export type ActionState = { errors?: Record<string, string>; values?: Record<string, string> } | null
@@ -137,5 +138,6 @@ export async function decideRegistrationAction(form: FormData) {
   } catch (error) {
     if (!(error instanceof RegistrationError)) throw error
   }
+  notifyLater({ eventId: event.id })
   redirect(`/${lang}/dashboard/events/${eventId}/registrations`)
 }

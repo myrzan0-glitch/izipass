@@ -10,6 +10,7 @@ import { getPublicEvent } from "@/lib/events"
 import { DEFAULT_LOCALE, isLocale } from "@/lib/i18n/config"
 import { RegistrationError, cancelRegistration, register } from "@/lib/registrations"
 import { fieldErrors } from "@/lib/validation"
+import { notifyLater } from "@/lib/telegram/notify"
 
 const registerSchema = z.object({
   name: z.string().trim().min(2, "required").max(80, "tooLong"),
@@ -49,6 +50,8 @@ export async function registerAction(_prev: ActionState, form: FormData): Promis
     if (error instanceof RegistrationError) return { errors: { form: `registration_${error.code}` }, values }
     throw error
   }
+  // Registering expires stale holds, which can move the waitlist.
+  notifyLater({ eventId: row.event.id })
   redirect(`/${lang}/r/${id}`)
 }
 
@@ -58,7 +61,8 @@ export async function cancelRegistrationAction(form: FormData) {
   if (!session) redirect(`/${lang}/login`)
   const id = str(form, "registrationId")
   try {
-    await cancelRegistration(db(), id, session.userId)
+    const cancelled = await cancelRegistration(db(), id, session.userId)
+    notifyLater({ eventId: cancelled.eventId })
   } catch (error) {
     if (!(error instanceof RegistrationError)) throw error
   }

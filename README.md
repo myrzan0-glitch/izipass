@@ -9,6 +9,7 @@ izipass never holds money: attendees pay the organizer directly. Pass signing is
 - Next.js 16 (App Router), shadcn/ui, Tailwind CSS v4. UI is built from shadcn components and tokens only.
 - Postgres (Neon) with Drizzle ORM; migrations in `drizzle/`, applied on build.
 - Sign-in with Telegram (Login Widget) or email (one-time link via Resend). Sessions are signed cookies (JWT, 30 days).
+- Telegram bot (the same bot as the login widget): organizers get each new receipt as a photo with the auto-check result and **Approve / Reject** buttons (reject asks for a second tap); attendees get a message with the ticket when confirmed, the reason when rejected, a "spot opened, pay by …" when promoted from the waitlist, and a notice when the payment time ran out. Messages go out after the response (`after()`), are claimed in the database so nobody hears twice, and the daily cron catches anything missed. Only people who signed in with Telegram can be messaged. The webhook (`/api/telegram/webhook`, secret derived from the bot token) and the command list are registered by `scripts/telegram-setup.mjs` on every **production** build.
 - Languages: uz / ru / kk / en, locale in the URL (`/ru/...`).
 - Tickets: a confirmed registration gets a QR (`/t/<id>~<signature>`, HMAC-signed, nothing stored) and "Add to Apple Wallet / Google Wallet" buttons. Passes are built by the wallet project's `POST /api/v1/passes` (`WALLET_API_URL`, `WALLET_API_KEY`), so Apple and Google credentials never live here.
 - Check-in: `/dashboard/events/[id]/scan` reads QR codes with the camera (ZXing wasm served from `/zxing`, copied on install), verifies them against a ticket list cached on the phone, so it works offline, and syncs check-ins when back online. A reference code can be typed instead.
@@ -39,6 +40,8 @@ src/app/[lang]/r/[id]        attendee's registration: pay, upload receipt, statu
 src/app/[lang]/t/[token]     public ticket page (what a camera scan opens)
 src/app/api/tickets          Apple .pkpass download / Google save redirect via the wallet project
 src/app/api/auth/            telegram, email, email/verify, logout
+src/app/api/telegram/webhook button taps and /start from the bot
+src/lib/telegram/            Bot API client, bot logic (notifications, buttons), notifyLater()
 src/app/api/registrations    receipt upload; api/receipts serves them and takes the OCR text; api/cron housekeeping
 src/lib/auth/                session cookie, Telegram verification, login tokens, user data access
 src/lib/db/                  Drizzle schema + client
@@ -52,7 +55,7 @@ docs/plan.md                 product plan and decisions
 1. Import the repo, framework Next.js. Domain: `izipass.myrzan.com`.
 2. Storage → create **Neon Postgres** and connect it (`DATABASE_URL`).
 3. Env vars from `.env.example`: `SESSION_SECRET`, `TELEGRAM_BOT_TOKEN`, `NEXT_PUBLIC_TELEGRAM_BOT`, `RESEND_API_KEY`, `EMAIL_FROM`, `CRON_SECRET`, `WALLET_API_KEY` (the same value goes into `WALLET_API_KEYS` of the wallet project).
-4. In @BotFather: `/setdomain` → `izipass.myrzan.com` for the bot.
+4. In @BotFather: `/newbot` (gives `TELEGRAM_BOT_TOKEN`; its username goes into `NEXT_PUBLIC_TELEGRAM_BOT`), then `/setdomain` → `izipass.myrzan.com`. The next production deploy connects the bot's webhook by itself (see the build log line `telegram: webhook set to …`).
 5. In Resend: verify the sending domain for `EMAIL_FROM`.
 
 The build runs migrations before `next build`.

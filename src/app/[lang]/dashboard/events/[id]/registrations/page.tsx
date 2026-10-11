@@ -20,6 +20,7 @@ import { isLocale } from "@/lib/i18n/config"
 import { getDictionary } from "@/lib/i18n/dictionaries"
 import { fmt } from "@/lib/i18n/format"
 import { countByStatus, expireHolds, listEventRegistrations, type ReceiptSummary } from "@/lib/registrations"
+import { notifyLater } from "@/lib/telegram/notify"
 
 export async function generateMetadata({ params }: PageProps<"/[lang]/dashboard/events/[id]/registrations">): Promise<Metadata> {
   const { lang } = await params
@@ -35,6 +36,7 @@ async function Content({ params }: { params: PageProps<"/[lang]/dashboard/events
   const event = await getEvent(db(), organizer.id, id)
   if (!event) notFound()
   await expireHolds(db(), event.id)
+  notifyLater({ eventId: event.id })
   const rows = await listEventRegistrations(db(), event.id)
   const counts = countByStatus(rows)
   const t = dict.registrations

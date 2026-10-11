@@ -4,6 +4,7 @@ import { getEvent } from "@/lib/events"
 import { getOrganizerForUser } from "@/lib/organizers"
 import { expireHolds, listEventRegistrations } from "@/lib/registrations"
 import { ticketToken } from "@/lib/tickets"
+import { notifyLater } from "@/lib/telegram/notify"
 
 export type ScanTicket = {
   id: string
@@ -27,6 +28,7 @@ export async function GET(_request: Request, { params }: RouteContext<"/api/even
   if (!event) return Response.json({ error: "notFound" }, { status: 404 })
 
   await expireHolds(db(), event.id)
+  notifyLater({ eventId: event.id })
   const rows = await listEventRegistrations(db(), event.id)
   const tickets: ScanTicket[] = rows.map(({ registration: r }) => ({
     id: r.id,
