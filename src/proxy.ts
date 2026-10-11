@@ -42,6 +42,12 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(request.nextUrl)
   }
 
+  // Signed-in people never see the landing page: their home is Events.
+  if (!second && (await hasSession(request))) {
+    request.nextUrl.pathname = `/${first}/events`
+    return NextResponse.redirect(request.nextUrl)
+  }
+
   // Signed-in area: bounce to login, remembering where the user was going.
   if (PROTECTED.includes(second) && !(await hasSession(request))) {
     const login = request.nextUrl.clone()

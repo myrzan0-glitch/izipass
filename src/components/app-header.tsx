@@ -30,6 +30,20 @@ async function Account({ lang, dict }: { lang: Locale; dict: Dictionary }) {
   return <AccountMenu lang={lang} name={user.name || user.email || "—"} detail={detail} dict={dict} />
 }
 
+function Logo({ href }: { href: string }) {
+  return (
+    <Link href={href} className="mr-auto font-mono text-sm font-medium tracking-tight md:mr-0 md:flex-1">
+      {SITE_NAME}
+    </Link>
+  )
+}
+
+/** On public pages the logo goes to Events for signed-in people, else to the home page. */
+async function PublicLogo({ lang }: { lang: Locale }) {
+  const session = await getSession()
+  return <Logo href={session ? `/${lang}/events` : `/${lang}`} />
+}
+
 /**
  * The bar on top of every signed-in page: Events and My organizations,
  * language, Create event, account. On phones the sections live in the account menu.
@@ -57,12 +71,13 @@ export function AppHeader({
   return (
     <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/80">
       <div className="mx-auto flex h-14 w-full max-w-6xl items-center gap-2 px-4 sm:px-6">
-        <Link
-          href={`/${lang}${app ? "/events" : ""}`}
-          className="mr-auto font-mono text-sm font-medium tracking-tight md:mr-0 md:flex-1"
-        >
-          {SITE_NAME}
-        </Link>
+        {app ? (
+          <Logo href={`/${lang}/events`} />
+        ) : (
+          <Suspense fallback={<Logo href={`/${lang}`} />}>
+            <PublicLogo lang={lang} />
+          </Suspense>
+        )}
         {app && (
           <nav aria-label={t.events} className="hidden items-center gap-1 md:flex">
             {links.map(({ key, href, label, icon: Icon }) => (
