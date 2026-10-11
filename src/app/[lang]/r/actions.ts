@@ -5,6 +5,7 @@ import { z } from "zod"
 
 import type { ActionState } from "@/app/[lang]/dashboard/actions"
 import { getSession } from "@/lib/auth/session"
+import { fillProfile } from "@/lib/auth/users"
 import { db } from "@/lib/db"
 import { getPublicEvent } from "@/lib/events"
 import { DEFAULT_LOCALE, isLocale } from "@/lib/i18n/config"
@@ -46,6 +47,8 @@ export async function registerAction(_prev: ActionState, form: FormData): Promis
     if (error instanceof RegistrationError) return { errors: { form: `registration_${error.code}` }, values }
     throw error
   }
+  // The first registration fills in the profile, so the next one is quicker.
+  await fillProfile(db(), session.userId, parsed.data)
   // Registering expires stale holds, which can move the waitlist.
   notifyLater({ eventId: row.event.id })
   redirect(`/${lang}/r/${id}`)

@@ -1,14 +1,15 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react"
-import { Camera, CameraOff, RefreshCw } from "lucide-react"
+import { Camera, CameraOff, CircleCheck, RefreshCw, Search } from "lucide-react"
 
 import type { ScanTicket } from "@/app/api/events/[id]/tickets/route"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { Separator } from "@/components/ui/separator"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { detectQr } from "@/lib/client/detect"
 import type { Locale } from "@/lib/i18n/config"
 import type { Dictionary } from "@/lib/i18n/dictionaries/en"
@@ -70,7 +71,8 @@ export function Scanner({ lang, eventId, eventTitle, dict }: Props) {
   const [loadError, setLoadError] = useState(false)
   const [cameraState, setCameraState] = useState<"off" | "on" | "error">("off")
   const [result, setResult] = useState<Result | null>(null)
-  const [manual, setManual] = useState("")
+  const [search, setSearch] = useState("")
+  const [list, setList] = useState<"out" | "in">("out")
   const online = useOnline()
   const lastScan = useRef<{ token: string; at: number }>({ token: "", at: 0 })
 
@@ -150,6 +152,29 @@ export function Scanner({ lang, eventId, eventTitle, dict }: Props) {
     [tickets, eventId, sync],
   )
 
+  /** Takes back the last check-in: drops it from the queue, or tells the server. */
+  const undo = useCallback(
+    async (ticket: ScanTicket) => {
+      const next = (tickets ?? []).map((x) => (x.id === ticket.id ? { ...x, checkedInAt: null } : x))
+      setTickets(next)
+      writeStorage(storageKey(eventId, "tickets"), next)
+      const queue = readStorage<Pending[]>(storageKey(eventId, "pending")) ?? []
+      const left = queue.filter((item) => item.token !== ticket.token)
+      setPending(left)
+      writeStorage(storageKey(eventId, "pending"), left)
+      setResult(null)
+      lastScan.current = { token: "", at: 0 }
+      if (left.length === queue.length) {
+        await fetch(`/api/events/${eventId}/checkin`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token: ticket.token, undo: true }),
+        }).catch(() => null)
+      }
+    },
+    [tickets, eventId],
+  )
+
   // --- camera -------------------------------------------------------------
 
   useEffect(() => {
@@ -183,14 +208,22 @@ export function Scanner({ lang, eventId, eventTitle, dict }: Props) {
     }
   }, [cameraState, check])
 
-  const checkedIn = tickets?.filter((x) => x.checkedInAt).length ?? 0
-  const confirmed = tickets?.filter((x) => x.status === "confirmed").length ?? 0
+  const g = dict.guest
+  const confirmedTickets = tickets?.filter((x) => x.status === "confirmed") ?? []
+  const checkedIn = confirmedTickets.filter((x) => x.checkedInAt).length
+  const confirmed = confirmedTickets.length
   const time = (iso: string) => new Intl.DateTimeFormat(lang, { timeZone: "Asia/Tashkent", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(iso))
+  const needle = search.trim().toLowerCase()
+  const shown = confirmedTickets
+    .filter((x) => (list === "in" ? !!x.checkedInAt : !x.checkedInAt))
+    .filter((x) => !needle || x.name.toLowerCase().includes(needle) || x.reference.toLowerCase().includes(needle))
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-2">
-        <Badge variant="secondary">{fmt(t.counter, { n: checkedIn, total: confirmed })}</Badge>
+        <Badge variant="secondary" className="tabular-nums">
+          {fmt(g.inCount, { n: checkedIn, total: confirmed })}
+        </Badge>
         {!online && <Badge variant="outline">{t.offline}</Badge>}
         {pending.length > 0 && <Badge variant="outline">{fmt(t.pendingSync, { n: pending.length })}</Badge>}
         <Button variant="ghost" size="sm" className="ml-auto" onClick={() => load().then(sync)} disabled={!online}>
@@ -205,50 +238,94 @@ export function Scanner({ lang, eventId, eventTitle, dict }: Props) {
         </Alert>
       )}
 
-      <Card className="overflow-hidden py-0">
-        <CardContent className="p-0">
-          {cameraState === "on" ? (
-            <div className="relative bg-black">
-              <video ref={videoRef} className="aspect-[3/4] w-full object-cover sm:aspect-video" muted playsInline />
-              <div className="pointer-events-none absolute inset-x-12 top-1/2 aspect-square -translate-y-1/2 rounded-lg border-2 border-white/80 sm:inset-x-1/3" />
-              <Button variant="secondary" size="sm" className="absolute right-3 bottom-3" onClick={() => setCameraState("off")}>
-                <CameraOff />
-                {t.stop}
-              </Button>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center gap-3 p-8 text-center">
-              <p className="text-sm text-muted-foreground">{cameraState === "error" ? t.cameraError : t.hint}</p>
-              <Button size="lg" onClick={() => setCameraState("on")} disabled={!tickets}>
-                <Camera />
-                {t.start}
-              </Button>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <div className="relative overflow-hidden rounded-xl bg-primary text-primary-foreground">
+        {cameraState === "on" ? (
+          <>
+            <video ref={videoRef} className="aspect-[4/3] w-full object-cover" muted playsInline />
+            <div className="pointer-events-none absolute inset-x-1/4 top-1/2 aspect-square -translate-y-1/2 rounded-xl border-2 border-primary-foreground/80" />
+            <Button variant="secondary" size="sm" className="absolute right-3 bottom-3" onClick={() => setCameraState("off")}>
+              <CameraOff />
+              {t.stop}
+            </Button>
+          </>
+        ) : (
+          <div className="flex aspect-[4/3] flex-col items-center justify-center gap-4 p-6 text-center">
+            <div aria-hidden className="size-28 rounded-xl border-2 border-primary-foreground/60" />
+            <p className="max-w-xs text-sm text-primary-foreground/70">{cameraState === "error" ? t.cameraError : t.hint}</p>
+            <Button variant="secondary" onClick={() => setCameraState("on")} disabled={!tickets}>
+              <Camera />
+              {t.start}
+            </Button>
+          </div>
+        )}
+      </div>
 
-      {result && <ScanResult result={result} dict={dict} time={time} />}
+      {result && <ScanResult result={result} dict={dict} time={time} onUndo={undo} />}
 
       <form
-        className="flex gap-2"
+        className="relative"
         onSubmit={(e) => {
           e.preventDefault()
-          if (manual.trim()) check(manual)
-          setManual("")
+          // Enter on an exact code checks it in, like a scan.
+          const exact = confirmedTickets.find((x) => x.reference.toLowerCase() === needle)
+          if (exact || /^[a-z]+-\d+$/i.test(search.trim())) check(search)
         }}
       >
-        <Input value={manual} onChange={(e) => setManual(e.target.value)} placeholder={t.manualPlaceholder} aria-label={t.manual} autoCapitalize="characters" />
-        <Button type="submit" variant="outline" disabled={!tickets}>
-          {t.check}
-        </Button>
+        <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          type="search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder={g.findGuest}
+          aria-label={t.manual}
+          className="pl-9"
+        />
       </form>
-      <p className="text-xs text-muted-foreground">{fmt(t.eventLine, { title: eventTitle })}</p>
+
+      <Tabs value={list} onValueChange={(v) => setList(v as "out" | "in")}>
+        <TabsList className="w-full">
+          <TabsTrigger value="out">
+            {g.notIn}
+            <span className="text-muted-foreground tabular-nums">{confirmed - checkedIn}</span>
+          </TabsTrigger>
+          <TabsTrigger value="in">
+            {g.checkedIn}
+            <span className="text-muted-foreground tabular-nums">{checkedIn}</span>
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
+
+      {shown.length === 0 ? (
+        <p className="py-4 text-center text-sm text-muted-foreground">{g.nobody}</p>
+      ) : (
+        <ul className="flex flex-col">
+          {shown.map((x, i) => (
+            <li key={x.id}>
+              {i > 0 && <Separator />}
+              <div className="flex items-center gap-3 py-3">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-medium">{x.name}</p>
+                  <p className="font-mono text-sm text-muted-foreground">
+                    {x.reference}
+                    {x.checkedInAt && ` · ${time(x.checkedInAt)}`}
+                  </p>
+                </div>
+                {!x.checkedInAt && (
+                  <Button variant="outline" size="lg" onClick={() => check(x.token)}>
+                    {g.checkIn}
+                  </Button>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="text-sm text-muted-foreground">{fmt(t.eventLine, { title: eventTitle })}</p>
     </div>
   )
 }
 
-function ScanResult({ result, dict, time }: { result: Result; dict: Dictionary; time: (iso: string) => string }) {
+function ScanResult({ result, dict, time, onUndo }: { result: Result; dict: Dictionary; time: (iso: string) => string; onUndo: (ticket: ScanTicket) => void }) {
   const t = dict.scan
   if (result.kind === "unknown") {
     return (
@@ -263,8 +340,14 @@ function ScanResult({ result, dict, time }: { result: Result; dict: Dictionary; 
   if (result.kind === "ok") {
     return (
       <Alert>
-        <AlertTitle className="text-lg">✓ {t.ok}</AlertTitle>
-        <AlertDescription>{detail}</AlertDescription>
+        <CircleCheck />
+        <AlertTitle>{fmt(dict.guest.checkedInAlert, { name: ticket.name })}</AlertTitle>
+        <AlertDescription className="flex w-full items-center justify-between gap-3">
+          <span className="font-mono">{ticket.reference}</span>
+          <Button variant="outline" size="sm" onClick={() => onUndo(ticket)}>
+            {dict.guest.undo}
+          </Button>
+        </AlertDescription>
       </Alert>
     )
   }

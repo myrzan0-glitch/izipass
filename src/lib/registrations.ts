@@ -80,6 +80,16 @@ export async function activeCount(db: Db, eventId: string) {
   return row?.n ?? 0
 }
 
+/** Confirmed guests for the event page: how many, and the first names (for initials only). */
+export async function goingPreview(db: Db, eventId: string, limit = 4) {
+  const rows = await db
+    .select({ name: registrations.name })
+    .from(registrations)
+    .where(and(eq(registrations.eventId, eventId), eq(registrations.status, "confirmed")))
+    .orderBy(registrations.decidedAt)
+  return { count: rows.length, names: rows.slice(0, limit).map((r) => r.name) }
+}
+
 /** Moves the earliest waitlisted people into held spots while there is room. */
 export async function promoteWaitlist(db: Db, eventId: string, now = new Date()) {
   const [event] = await db.select().from(events).where(eq(events.id, eventId)).limit(1)

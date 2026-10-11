@@ -52,13 +52,15 @@ export default async function LoginPage({ params, searchParams }: PageProps<"/[l
   const dict = await getDictionary(lang)
 
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-10 px-4 py-6 sm:py-12">
+    <>
       <SiteHeader lang={lang} dict={dict} />
-      <div className="flex flex-1 items-start justify-center">
-        <Suspense fallback={<Skeleton className="h-72 w-full max-w-sm" />}>
-          <LoginCard lang={lang} searchParams={searchParams} dict={dict.login} />
-        </Suspense>
-      </div>
-    </main>
+      <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-10 px-4 pt-8 pb-16 sm:pt-12">
+        <div className="flex flex-1 items-start justify-center">
+          <Suspense fallback={<Skeleton className="h-72 w-full max-w-sm" />}>
+            <LoginCard lang={lang} searchParams={searchParams} dict={dict.login} />
+          </Suspense>
+        </div>
+      </main>
+    </>
   )
 }

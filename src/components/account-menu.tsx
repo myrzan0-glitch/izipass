@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import type { Locale } from "@/lib/i18n/config"
 import type { Dictionary } from "@/lib/i18n/dictionaries/en"
+import { initials } from "@/lib/initials"
 
 type Props = {
   lang: Locale
@@ -28,16 +29,6 @@ type Props = {
   /** @username or email, shown under the name. */
   detail: string | null
   dict: Dictionary
-}
-
-export function initials(name: string) {
-  const letters = name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase())
-    .join("")
-  return letters || "?"
 }
 
 /** Header avatar: who you are, the app's sections, settings, theme, sign out. */

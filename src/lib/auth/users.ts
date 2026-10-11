@@ -114,3 +114,13 @@ export async function deleteAccount(db: Db, userId: string) {
   await db.delete(users).where(eq(users.id, userId))
   return true
 }
+
+/** Keeps the name and phone from a registration when the profile has none yet. */
+export async function fillProfile(db: Db, userId: string, input: { name: string; phone: string }) {
+  const user = await getUser(db, userId)
+  if (!user) return
+  const patch: Partial<typeof users.$inferInsert> = {}
+  if (!user.name) patch.name = input.name
+  if (!user.phone) patch.phone = input.phone
+  if (Object.keys(patch).length > 0) await db.update(users).set(patch).where(eq(users.id, userId))
+}

@@ -12,8 +12,8 @@ const subscribe = (tick: () => void) => {
   return () => clearInterval(id)
 }
 
-/** "29:41 left to pay", live; refreshes the page when the hold runs out. */
-export function Countdown({ deadline, label, done }: { deadline: string; label: string; done: string }) {
+/** "29:41 left to pay", live; refreshes the page when the hold runs out. `text` renders it without the badge. */
+export function Countdown({ deadline, label, done, variant = "badge" }: { deadline: string; label: string; done: string; variant?: "badge" | "text" }) {
   const router = useRouter()
   const end = new Date(deadline).getTime()
   // Seconds left, re-read every second; null on the server (no clock in the HTML).
@@ -36,6 +36,7 @@ export function Countdown({ deadline, label, done }: { deadline: string; label: 
   const mm = Math.floor(left / 60)
   const ss = String(left % 60).padStart(2, "0")
   const time = mm >= 60 ? `${Math.floor(mm / 60)}:${String(mm % 60).padStart(2, "0")}:${ss}` : `${mm}:${ss}`
+  if (variant === "text") return <span className="tabular-nums">{left > 0 ? fmt(label, { time }) : done}</span>
   return (
     <Badge variant={left > 0 && left < 300 ? "destructive" : "secondary"} className="tabular-nums" aria-live="off">
       <Timer />

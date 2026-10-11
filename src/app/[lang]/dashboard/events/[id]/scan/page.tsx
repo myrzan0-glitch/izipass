@@ -25,8 +25,8 @@ async function Content({ params }: { params: PageProps<"/[lang]/dashboard/events
     <DashboardShell
       lang={lang}
       dict={dict}
-      title={dict.scan.title}
-      description={event.title}
+      title={event.title}
+      description={dict.guest.doorCheckIn}
       active="events"
       width="narrow"
       back={{ href: `/${lang}/dashboard/events/${event.id}/guests`, label: dict.manage.tabs.guests }}

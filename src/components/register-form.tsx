@@ -14,7 +14,7 @@ type Props = {
   lang: Locale
   organizerSlug: string
   eventSlug: string
-  defaults: { name: string }
+  defaults: { name: string; phone?: string }
   action: (prev: ActionState, form: FormData) => Promise<ActionState>
   dict: Dictionary
 }
@@ -46,7 +46,7 @@ export function RegisterForm({ lang, organizerSlug, eventSlug, defaults, action,
             inputMode="tel"
             autoComplete="tel"
             placeholder="+998 90 123 45 67"
-            defaultValue={v("phone")}
+            defaultValue={v("phone", defaults.phone ?? "")}
             aria-invalid={!!err("phone")}
             required
           />
@@ -59,7 +59,7 @@ export function RegisterForm({ lang, organizerSlug, eventSlug, defaults, action,
           {err("note") && <FieldError>{err("note")}</FieldError>}
         </Field>
         {err("form") && <FieldError>{err("form")}</FieldError>}
-        <Field orientation="horizontal">
+        <Field>
           <Button type="submit" size="lg" disabled={pending}>
             {pending ? dict.common.saving : t.submit}
           </Button>
