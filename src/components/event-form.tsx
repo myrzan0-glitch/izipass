@@ -22,7 +22,15 @@ import { slugify } from "@/lib/slug"
 import { toLocalInput } from "@/lib/time"
 import { CLOSES_BEFORE_MINUTES, HOLD_MINUTES } from "@/lib/validation"
 
-export type OrgOption = { id: string; name: string; slug: string; logoUrl: string | null; maxCapacity: number }
+export type OrgOption = {
+  id: string
+  name: string
+  slug: string
+  logoUrl: string | null
+  maxCapacity: number
+  /** Where the organization's last paid event took payments, to fill in a new one. */
+  payment?: { paymentTo: string; paymentInstructions: string }
+}
 
 type Props = {
   lang: Locale
@@ -110,6 +118,7 @@ export function EventForm({ lang, event, section, organizers, defaultOrganizerId
     <>
       {hidden("capacity", String(event.capacity))}
       {hidden("priceUzs", String(event.priceUzs))}
+      {hidden("paymentTo", event.paymentTo)}
       {hidden("paymentInstructions", event.paymentInstructions)}
       {hidden("holdMinutes", String(event.holdMinutes))}
       {hidden("registrationClosesBefore", String(event.registrationClosesBefore))}
@@ -154,22 +163,34 @@ export function EventForm({ lang, event, section, organizers, defaultOrganizerId
       {err("priceUzs") ? <FieldError>{err("priceUzs")}</FieldError> : <FieldDescription>{t.priceHint}</FieldDescription>}
     </Field>
   )
+  // A new event starts with the organization's last payment details; switching organization swaps them.
+  const paymentDefaults = event ?? organizer?.payment ?? { paymentTo: "", paymentInstructions: "" }
+  const paymentToField = (
+    <Field data-invalid={!!err("paymentTo")} key={`to-${organizerId}`}>
+      <Input
+        id="paymentTo"
+        name="paymentTo"
+        defaultValue={v("paymentTo", paymentDefaults.paymentTo)}
+        placeholder={t.paymentToPlaceholder}
+        maxLength={200}
+        autoComplete="off"
+        aria-invalid={!!err("paymentTo")}
+      />
+      {err("paymentTo") ? <FieldError>{err("paymentTo")}</FieldError> : <FieldDescription>{t.paymentToHint}</FieldDescription>}
+    </Field>
+  )
   const paymentField = (
-    <Field data-invalid={!!err("paymentInstructions")}>
+    <Field data-invalid={!!err("paymentInstructions")} key={`note-${organizerId}`}>
       <Textarea
         id="paymentInstructions"
         name="paymentInstructions"
-        rows={3}
-        defaultValue={v("paymentInstructions", event?.paymentInstructions ?? "")}
+        rows={2}
+        defaultValue={v("paymentInstructions", paymentDefaults.paymentInstructions)}
         placeholder={t.paymentInstructionsPlaceholder}
         maxLength={1000}
         aria-invalid={!!err("paymentInstructions")}
       />
-      {err("paymentInstructions") ? (
-        <FieldError>{err("paymentInstructions")}</FieldError>
-      ) : (
-        <FieldDescription>{t.paymentInstructionsHint}</FieldDescription>
-      )}
+      {err("paymentInstructions") && <FieldError>{err("paymentInstructions")}</FieldError>}
     </Field>
   )
   const holdField = (
@@ -252,6 +273,10 @@ export function EventForm({ lang, event, section, organizers, defaultOrganizerId
             <CardContent>
               <FieldGroup>
                 <div className="flex flex-col gap-3">
+                  <FieldLabel htmlFor="paymentTo">{t.paymentTo}</FieldLabel>
+                  {paymentToField}
+                </div>
+                <div className="flex flex-col gap-3">
                   <FieldLabel htmlFor="paymentInstructions">{t.paymentInstructions}</FieldLabel>
                   {paymentField}
                 </div>
@@ -266,6 +291,7 @@ export function EventForm({ lang, event, section, organizers, defaultOrganizerId
             </CardContent>
           </Card>
         )}
+        {priceValue <= 0 && hidden("paymentTo", v("paymentTo", event?.paymentTo ?? ""))}
         {priceValue <= 0 && hidden("paymentInstructions", v("paymentInstructions", event?.paymentInstructions ?? ""))}
         {holdHidden}
         <Card>
@@ -432,6 +458,10 @@ export function EventForm({ lang, event, section, organizers, defaultOrganizerId
               {priceValue > 0 && (
                 <>
                   <Separator />
+                  <Row label={t.paymentTo} htmlFor="paymentTo">
+                    {paymentToField}
+                  </Row>
+                  <Separator />
                   <Row label={t.paymentInstructions} htmlFor="paymentInstructions">
                     {paymentField}
                   </Row>
@@ -454,7 +484,8 @@ export function EventForm({ lang, event, section, organizers, defaultOrganizerId
                 </>
               )}
             </Card>
-            {priceValue <= 0 && hidden("paymentInstructions", v("paymentInstructions", ""))}
+            {priceValue <= 0 && hidden("paymentTo", "")}
+            {priceValue <= 0 && hidden("paymentInstructions", "")}
             {holdHidden}
           </div>
         )}

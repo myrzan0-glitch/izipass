@@ -115,7 +115,7 @@ export async function saveOrganizerAction(_prev: ActionState, form: FormData): P
     if (error instanceof SlugTakenError) return { errors: { slug: "slugTaken" }, values: values(form) }
     throw error
   }
-  redirect(organizerId ? `/${lang}/dashboard/organizations/${saved.id}?saved=1` : `/${lang}/dashboard/organizations`)
+  redirect(organizerId ? `/${lang}/dashboard/organizations/${saved.id}/settings?saved=1` : `/${lang}/dashboard/organizations/${saved.id}`)
 }
 
 /** Organizer settings → Payments: auto-check add-on and payout card details. */
@@ -130,7 +130,7 @@ export async function savePaymentSettingsAction(_prev: ActionState, form: FormDa
   })
   if (!parsed.success) return { errors: fieldErrors(parsed.error), values: values(form) }
   await updatePaymentSettings(db(), organizer.id, parsed.data)
-  redirect(`/${lang}/dashboard/organizations/${organizer.id}?tab=payments&saved=1`)
+  redirect(`/${lang}/dashboard/organizations/${organizer.id}/payments?saved=1`)
 }
 
 /** Copies an event as a draft a week later (weekly clubs). */
@@ -160,6 +160,7 @@ function parseEvent(form: FormData) {
     venueUrl: str(form, "venueUrl"),
     capacity: num(form, "capacity"),
     priceUzs: num(form, "priceUzs"),
+    paymentTo: str(form, "paymentTo"),
     paymentInstructions: str(form, "paymentInstructions"),
     holdMinutes: num(form, "holdMinutes"),
     registrationClosesBefore: num(form, "registrationClosesBefore") || 0,
@@ -302,7 +303,7 @@ export async function reconnectTelegramAction(form: FormData) {
       console.error("[telegram] reconnect failed", error)
     }
   }
-  redirect(`/${lang}/dashboard/organizations/${organizer.id}?tab=telegram`)
+  redirect(`/${lang}/dashboard/organizations/${organizer.id}/telegram`)
 }
 
 /** More tab → Event link: change only the address. */

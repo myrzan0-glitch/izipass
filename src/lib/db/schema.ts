@@ -55,6 +55,8 @@ export const organizers = pgTable(
     name: text("name").notNull(),
     description: text("description").notNull().default(""),
     logoUrl: text("logo_url"),
+    /** Wide banner on top of the public page. */
+    coverUrl: text("cover_url"),
     links: text("links").array().notNull().default(sql`'{}'::text[]`),
     plan: planEnum("plan").notNull().default("free"),
     planUntil: timestamp("plan_until", { withTimezone: true }),
@@ -105,7 +107,9 @@ export const events = pgTable(
     capacity: integer("capacity").notNull(),
     /** 0 = free event. */
     priceUzs: integer("price_uzs").notNull().default(0),
-    /** Shown to attendees after registering: Click/Payme link, card number. */
+    /** Where guests pay: a card number, a Click/Payme link or a phone/tag, as the organizer typed it. */
+    paymentTo: text("payment_to").notNull().default(""),
+    /** Under "where to pay": the name on the card, or how to pay (older events keep everything here). */
     paymentInstructions: text("payment_instructions").notNull().default(""),
     /** How long a spot is held while the attendee pays. */
     holdMinutes: integer("hold_minutes").notNull().default(30),

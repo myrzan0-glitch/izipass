@@ -2,6 +2,7 @@ import { createHash, randomInt } from "node:crypto"
 import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, lt, ne, or, sql } from "drizzle-orm"
 
 import type { Db } from "@/lib/db"
+import { cardLast4 } from "@/lib/payment-text"
 import { isUuid } from "@/lib/ids"
 import { events, organizerMembers, organizers, receipts, registrations, type Event, type Receipt, type Registration, type RegistrationStatus } from "@/lib/db/schema"
 import { checkReceipt, parseReceipt } from "@/lib/receipt-check"
@@ -283,7 +284,8 @@ export async function recordReceiptText(db: Db, receiptId: string, text: string,
     registeredAt: registration.updatedAt,
     uploadedAt: receipt.createdAt,
     referenceCode: registration.referenceCode,
-    payoutCardLast4: organizer.payoutCardLast4,
+    // The card in the settings, else the one guests were told to pay to.
+    payoutCardLast4: organizer.payoutCardLast4 ?? cardLast4(event.paymentTo),
     payoutName: organizer.payoutName,
     duplicate,
   })

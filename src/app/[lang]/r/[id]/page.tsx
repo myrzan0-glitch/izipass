@@ -2,22 +2,23 @@ import { Suspense } from "react"
 import type { Metadata } from "next"
 import Link from "next/link"
 import { notFound } from "next/navigation"
-import { CalendarDays, Check, ChevronLeft, Clock, ExternalLink, ImageIcon, LoaderCircle, MapPin, Send } from "lucide-react"
+import { Ban, CalendarDays, CalendarX2, Check, ChevronLeft, Clock, ExternalLink, Hourglass, LoaderCircle, MapPin, Send, X } from "lucide-react"
 
 import { cancelRegistrationAction } from "@/app/[lang]/r/actions"
 import { AddToCalendar } from "@/components/add-to-calendar"
 import { ConfirmAction } from "@/components/confirm-action"
+import { ConnectTelegram } from "@/components/connect-telegram"
 import { CopyButton } from "@/components/copy-button"
 import { Countdown } from "@/components/countdown"
 import { OrgMark } from "@/components/org-mark"
+import { OrganizerLinks } from "@/components/organizer-links"
 import { PageSkeleton } from "@/components/page-skeleton"
 import { ReceiptUpload } from "@/components/receipt-upload"
 import { SiteHeader } from "@/components/site-header"
 import { TicketCard } from "@/components/ticket-card"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { FieldLabel } from "@/components/ui/field"
 import { Separator } from "@/components/ui/separator"
 import { requireUser } from "@/lib/auth/current"
@@ -26,9 +27,10 @@ import { db } from "@/lib/db"
 import { isLocale } from "@/lib/i18n/config"
 import { getDictionary } from "@/lib/i18n/dictionaries"
 import type { Dictionary } from "@/lib/i18n/dictionaries/en"
-import { paymentDetails } from "@/lib/payment-text"
+import { describePaymentTo, paymentDetails } from "@/lib/payment-text"
 import { expireHolds, getRegistration, latestReceiptId } from "@/lib/registrations"
-import { SITE_URL } from "@/lib/site"
+import { SITE_URL, TELEGRAM_BOT } from "@/lib/site"
+import { cn } from "@/lib/utils"
 import { ticketUrl } from "@/lib/tickets"
 import { formatDateRange, formatDateTime, formatMoney } from "@/lib/time"
 import { notifyLater } from "@/lib/telegram/notify"
@@ -66,6 +68,36 @@ function Step({ state, title, hint }: { state: StepState; title: string; hint: s
   )
 }
 
+/** The state of a registration: a round icon, a title and what it means, then any details. */
+function StatusCard({
+  tone = "neutral",
+  icon: Icon,
+  spin,
+  title,
+  description,
+  children,
+}: {
+  tone?: "neutral" | "bad"
+  icon: React.ComponentType<{ className?: string }>
+  spin?: boolean
+  title: string
+  description: string
+  children?: React.ReactNode
+}) {
+  return (
+    <Card>
+      <CardHeader className="justify-items-center gap-3 text-center">
+        <span className={cn("flex size-12 items-center justify-center rounded-full", tone === "bad" ? "bg-destructive/10 text-destructive" : "bg-muted")}>
+          <Icon className={cn("size-5", spin && "animate-spin")} />
+        </span>
+        <CardTitle className="text-xl">{title}</CardTitle>
+        <CardDescription className="text-balance">{description}</CardDescription>
+      </CardHeader>
+      {children && <CardContent className="flex flex-col gap-4">{children}</CardContent>}
+    </Card>
+  )
+}
+
 /**
  * A guest's registration: pay and upload the receipt, wait for approval,
  * then the ticket. Every other state is an alert with what to do next.
@@ -91,10 +123,27 @@ async function Content({ params, searchParams }: Props) {
   const canCancel = !eventCancelled && ["held", "proof_sent", "confirmed", "waitlist"].includes(reg.status)
   const canRegisterAgain = ["expired", "cancelled", "rejected"].includes(reg.status) && event.status === "published"
   const amount = `${formatMoney(event.priceUzs, lang)} ${dict.public.uzs}`
+  const payTo = describePaymentTo(event.paymentTo)
   const details = paymentDetails(event.paymentInstructions)
   const receiptId = reg.status === "proof_sent" ? await latestReceiptId(db(), reg.id) : null
   const when = formatDateRange(event.startsAt, event.endsAt, lang)
   const copy = (value: string, label: string) => <CopyButton value={value} label={label} copied={t.copied} />
+  // Who to talk to when something went wrong with the payment.
+  const contact = organizer.links.length > 0 && (
+    <div className="flex flex-col items-center gap-3 text-center">
+      <p className="text-sm text-muted-foreground">{g.contactOrganizer}</p>
+      <OrganizerLinks links={organizer.links} />
+    </div>
+  )
+  // How the guest hears about the decision: Telegram if linked, else an offer to link it.
+  const updates = user.telegramId ? (
+    <p className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+      <Send className="size-4" />
+      {g.connectedNote}
+    </p>
+  ) : (
+    <ConnectTelegram lang={lang} bot={TELEGRAM_BOT} dict={dict} />
+  )
 
   return (
     <>
@@ -122,10 +171,9 @@ async function Content({ params, searchParams }: Props) {
         </Link>
 
         {eventCancelled ? (
-          <Alert variant="destructive">
-            <AlertTitle>{t.eventCancelledTitle}</AlertTitle>
-            <AlertDescription>{t.eventCancelledBody}</AlertDescription>
-          </Alert>
+          <StatusCard tone="bad" icon={CalendarX2} title={t.eventCancelledTitle} description={t.eventCancelledBody}>
+            {contact}
+          </StatusCard>
         ) : (
           <>
             {reg.status === "held" && paid && (
@@ -152,18 +200,50 @@ async function Content({ params, searchParams }: Props) {
                       </div>
                       {copy(String(event.priceUzs), t.copy)}
                     </div>
-                    {details.cards.map((card) => (
-                      <div key={card} className="flex flex-col gap-3">
+                    {payTo ? (
+                      <div className="flex flex-col gap-3">
                         <Separator />
                         <div className="flex items-center gap-2">
                           <div className="min-w-0 flex-1">
-                            <p className="text-sm text-muted-foreground">{t.card}</p>
-                            <p className="font-mono font-medium tabular-nums select-all">{card}</p>
+                            <p className="text-sm text-muted-foreground">{dict.event.paymentTo}</p>
+                            <p className={`font-medium break-all select-all ${payTo.kind === "card" ? "font-mono tabular-nums" : ""}`}>{payTo.display}</p>
                           </div>
-                          {copy(card.replace(/ /g, ""), t.copy)}
+                          {copy(payTo.copy, t.copy)}
                         </div>
+                        {payTo.kind === "link" && (
+                          <Button variant="outline" asChild>
+                            <a href={payTo.copy} target="_blank" rel="noopener noreferrer">
+                              <ExternalLink />
+                              {g.openLink}
+                            </a>
+                          </Button>
+                        )}
                       </div>
-                    ))}
+                    ) : (
+                      // Older events: card numbers and links found in the free text.
+                      <>
+                        {details.cards.map((card) => (
+                          <div key={card} className="flex flex-col gap-3">
+                            <Separator />
+                            <div className="flex items-center gap-2">
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm text-muted-foreground">{t.card}</p>
+                                <p className="font-mono font-medium tabular-nums select-all">{card}</p>
+                              </div>
+                              {copy(card.replace(/ /g, ""), t.copy)}
+                            </div>
+                          </div>
+                        ))}
+                        {details.links.map((link) => (
+                          <Button key={link} variant="outline" asChild>
+                            <a href={link} target="_blank" rel="noopener noreferrer">
+                              <ExternalLink />
+                              {t.payLink}
+                            </a>
+                          </Button>
+                        ))}
+                      </>
+                    )}
                     <Separator />
                     <div className="flex items-center gap-2">
                       <div className="min-w-0 flex-1">
@@ -173,16 +253,12 @@ async function Content({ params, searchParams }: Props) {
                       {copy(reg.referenceCode, t.copy)}
                     </div>
                     <p className="text-sm text-muted-foreground">{t.referenceHint}</p>
-                    {details.links.map((link) => (
-                      <Button key={link} variant="outline" asChild>
-                        <a href={link} target="_blank" rel="noopener noreferrer">
-                          <ExternalLink />
-                          {t.payLink}
-                        </a>
-                      </Button>
-                    ))}
-                    <Separator />
-                    <p className="text-sm whitespace-pre-line">{event.paymentInstructions}</p>
+                    {event.paymentInstructions && (
+                      <>
+                        <Separator />
+                        <p className="text-sm whitespace-pre-line">{event.paymentInstructions}</p>
+                      </>
+                    )}
                   </CardContent>
                 </Card>
                 <div className="flex flex-col gap-3">
@@ -194,39 +270,33 @@ async function Content({ params, searchParams }: Props) {
 
             {reg.status === "proof_sent" && (
               <>
-                <Card>
-                  <CardHeader>
-                    <Badge variant="secondary">{g.waiting}</Badge>
-                    <CardTitle className="text-xl">{t.proofSentTitle}</CardTitle>
-                    <CardDescription>{t.proofSentBody}</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <ol className="flex flex-col gap-4">
-                      <Step state="done" title={g.stepRegistered} hint={formatDateTime(reg.createdAt, lang)} />
-                      <Step state="done" title={g.stepReceipt} hint={amount} />
-                      <Step state="now" title={g.stepApprove} hint={g.stepApproveHint} />
-                      <Step state="todo" title={g.stepTicket} hint={g.stepTicketHint} />
-                    </ol>
-                  </CardContent>
+                <StatusCard icon={LoaderCircle} spin title={g.waiting} description={t.proofSentBody}>
+                  <ol className="flex flex-col gap-4">
+                    <Step state="done" title={g.stepRegistered} hint={formatDateTime(reg.createdAt, lang)} />
+                    <Step state="done" title={g.stepReceipt} hint={amount} />
+                    <Step state="now" title={g.stepApprove} hint={g.stepApproveHint} />
+                    <Step state="todo" title={g.stepTicket} hint={g.stepTicketHint} />
+                  </ol>
                   {receiptId && (
-                    <CardFooter className="flex flex-col items-stretch gap-3">
-                      <Button variant="outline" asChild>
-                        <a href={`/api/receipts/${receiptId}`} target="_blank" rel="noopener">
-                          <ImageIcon />
-                          {g.viewReceipt}
+                    <>
+                      <Separator />
+                      <div className="flex items-center gap-3">
+                        <a href={`/api/receipts/${receiptId}`} target="_blank" rel="noopener" className="shrink-0">
+                          {/* eslint-disable-next-line @next/next/no-img-element -- a private, per-request image */}
+                          <img src={`/api/receipts/${receiptId}`} alt={t.yourReceipt} className="size-12 rounded-md border object-cover" />
                         </a>
-                      </Button>
-                      <ReceiptUpload registrationId={reg.id} ocr={organizer.autoCheck} dict={dict} label={t.replaceReceipt} variant="outline" />
-                    </CardFooter>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium">{t.yourReceipt}</p>
+                          <p className="text-sm text-muted-foreground">{amount}</p>
+                        </div>
+                        <div className="w-auto">
+                          <ReceiptUpload registrationId={reg.id} ocr={organizer.autoCheck} dict={dict} label={g.replace} variant="outline" compact />
+                        </div>
+                      </div>
+                    </>
                   )}
-                </Card>
-                {user.telegramId && (
-                  <Alert>
-                    <Send />
-                    <AlertTitle>{g.telegramTitle}</AlertTitle>
-                    <AlertDescription>{g.telegramBody}</AlertDescription>
-                  </Alert>
-                )}
+                </StatusCard>
+                {updates}
               </>
             )}
 
@@ -278,31 +348,27 @@ async function Content({ params, searchParams }: Props) {
             )}
 
             {reg.status === "waitlist" && (
-              <Alert>
-                <AlertTitle>{t.waitlistTitle}</AlertTitle>
-                <AlertDescription>{t.waitlistBody}</AlertDescription>
-              </Alert>
+              <>
+                <StatusCard icon={Hourglass} title={t.waitlistTitle} description={t.waitlistBody} />
+                {updates}
+              </>
             )}
 
             {reg.status === "rejected" && (
-              <Alert variant="destructive">
-                <AlertTitle>{t.rejectedTitle}</AlertTitle>
-                <AlertDescription>{reg.rejectReason || t.rejectedBody}</AlertDescription>
-              </Alert>
+              <StatusCard tone="bad" icon={X} title={t.rejectedTitle} description={t.rejectedBody}>
+                {reg.rejectReason && (
+                  <div className="rounded-lg bg-muted p-4 text-left">
+                    <p className="text-sm text-muted-foreground">{g.reasonLabel}</p>
+                    <p className="font-medium">{reg.rejectReason}</p>
+                  </div>
+                )}
+                {contact}
+              </StatusCard>
             )}
 
-            {reg.status === "expired" && (
-              <Alert>
-                <AlertTitle>{t.expiredTitle}</AlertTitle>
-                <AlertDescription>{t.expiredBody}</AlertDescription>
-              </Alert>
-            )}
+            {reg.status === "expired" && <StatusCard icon={Clock} title={t.expiredTitle} description={t.expiredBody} />}
 
-            {reg.status === "cancelled" && (
-              <Alert>
-                <AlertTitle>{t.cancelledTitle}</AlertTitle>
-              </Alert>
-            )}
+            {reg.status === "cancelled" && <StatusCard icon={Ban} title={t.cancelledTitle} description={dict.confirm.cancelRegistrationBody} />}
           </>
         )}
 

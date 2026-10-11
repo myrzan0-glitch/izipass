@@ -10,7 +10,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { requireUser } from "@/lib/auth/current"
 import { db } from "@/lib/db"
 import { PLAN_LIMITS } from "@/lib/db/schema"
-import { eventsThisMonth, planLimits } from "@/lib/events"
+import { eventsThisMonth, lastPaymentDetails, planLimits } from "@/lib/events"
 import { isLocale, type Locale } from "@/lib/i18n/config"
 import { getDictionary } from "@/lib/i18n/dictionaries"
 import type { Dictionary } from "@/lib/i18n/dictionaries/en"
@@ -27,13 +27,16 @@ async function Content({ lang, dict, searchParams }: { lang: Locale; dict: Dicti
   const query = await searchParams
   const user = await requireUser(lang, `/${lang}/dashboard/events/new`)
   const memberships = await listOrganizersForUser(db(), user.id)
-  const organizers = memberships.map(({ organizer }) => ({
-    id: organizer.id,
-    name: organizer.name,
-    slug: organizer.slug,
-    logoUrl: organizer.logoUrl,
-    maxCapacity: planLimits(organizer).participantsPerEvent,
-  }))
+  const organizers = await Promise.all(
+    memberships.map(async ({ organizer }) => ({
+      id: organizer.id,
+      name: organizer.name,
+      slug: organizer.slug,
+      logoUrl: organizer.logoUrl,
+      maxCapacity: planLimits(organizer).participantsPerEvent,
+      payment: await lastPaymentDetails(db(), organizer.id),
+    })),
+  )
   const chosen = memberships.find((m) => m.organizer.id === query.org)?.organizer ?? memberships[0]?.organizer
   // Drafts are always allowed; publishing counts against the plan, so warn early.
   const limits = chosen ? planLimits(chosen) : null

@@ -6,7 +6,6 @@ import { saveOrganizerAction } from "@/app/[lang]/dashboard/actions"
 import { DashboardShell } from "@/components/dashboard-shell"
 import { OrganizerForm } from "@/components/organizer-form"
 import { PageSkeleton } from "@/components/page-skeleton"
-import { Card, CardContent } from "@/components/ui/card"
 import { requireUser } from "@/lib/auth/current"
 import { isLocale, type Locale } from "@/lib/i18n/config"
 import { getDictionary } from "@/lib/i18n/dictionaries"
@@ -27,15 +26,10 @@ async function Content({ lang, dict }: { lang: Locale; dict: Dictionary }) {
       dict={dict}
       active="organizations"
       width="narrow"
-      title={dict.orgs.newTitle}
-      description={dict.orgs.newSubtitle}
       back={{ href: `/${lang}/dashboard/organizations`, label: dict.orgs.title }}
     >
-      <Card>
-        <CardContent>
-          <OrganizerForm lang={lang} organizer={null} action={saveOrganizerAction} dict={dict} />
-        </CardContent>
-      </Card>
+      <p className="text-sm text-muted-foreground">{dict.orgs.newSubtitle}</p>
+      <OrganizerForm lang={lang} organizer={null} action={saveOrganizerAction} dict={dict} />
     </DashboardShell>
   )
 }

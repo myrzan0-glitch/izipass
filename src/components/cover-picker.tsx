@@ -51,14 +51,14 @@ export function CoverPicker({ endpoint, url, dict }: Props) {
   }
 
   return (
-    <Field>
+    <Field className="relative">
       <FieldLabel className="sr-only">{t.cover}</FieldLabel>
       <input
         ref={input}
         type="file"
         name="cover"
         accept="image/jpeg,image/png,image/webp"
-        className="sr-only"
+        className="hidden"
         onChange={(e) => e.target.files?.[0] && pick(e.target.files[0])}
         disabled={busy}
       />

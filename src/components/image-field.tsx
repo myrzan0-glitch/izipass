@@ -14,7 +14,7 @@ type Props = {
   /** POST uploads, DELETE removes. */
   endpoint: string
   url: string | null
-  shape: "square" | "cover"
+  shape: "square" | "cover" | "banner"
   label: string
   hint: string
   /** Initials shown in an empty square (logo). */
@@ -37,7 +37,7 @@ export function ImageField({ endpoint, url, shape, label, hint, fallback, dict }
       let body: FormData | undefined
       if (file) {
         body = new FormData()
-        const blob = await prepareImage(file, shape === "square" ? "logo" : "cover").catch(() => file)
+        const blob = await prepareImage(file, shape === "square" ? "logo" : shape).catch(() => file)
         body.append("file", blob, "image")
       }
       const res = await fetch(endpoint, { method, body })
@@ -56,7 +56,7 @@ export function ImageField({ endpoint, url, shape, label, hint, fallback, dict }
   }
 
   return (
-    <Field data-invalid={!!error}>
+    <Field data-invalid={!!error} className="relative">
       <FieldLabel>{label}</FieldLabel>
       <div className={shape === "square" ? "flex items-center gap-4" : "flex flex-col gap-3"}>
         {shape === "square" ? (
@@ -66,12 +66,12 @@ export function ImageField({ endpoint, url, shape, label, hint, fallback, dict }
           </Avatar>
         ) : url ? (
           // eslint-disable-next-line @next/next/no-img-element -- our own resized image
-          <img src={url} alt="" className="aspect-square w-full rounded-xl border object-cover" />
+          <img src={url} alt="" className={`${shape === "banner" ? "aspect-[8/3]" : "aspect-square"} w-full rounded-xl border object-cover`} />
         ) : (
           <button
             type="button"
             onClick={() => input.current?.click()}
-            className="flex aspect-square w-full items-center justify-center rounded-xl border border-dashed bg-muted/50 text-muted-foreground hover:bg-accent/40"
+            className={`flex ${shape === "banner" ? "aspect-[8/3]" : "aspect-square"} w-full items-center justify-center rounded-xl border border-dashed bg-muted/50 text-muted-foreground hover:bg-accent/40`}
           >
             <ImagePlus className="size-6" aria-hidden />
             <span className="sr-only">{t.upload}</span>
@@ -82,7 +82,7 @@ export function ImageField({ endpoint, url, shape, label, hint, fallback, dict }
             ref={input}
             type="file"
             accept="image/jpeg,image/png,image/webp"
-            className="sr-only"
+            className="hidden"
             onChange={(e) => e.target.files?.[0] && send("POST", e.target.files[0])}
             disabled={busy}
           />

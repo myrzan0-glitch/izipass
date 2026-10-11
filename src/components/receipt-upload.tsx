@@ -37,10 +37,12 @@ type Props = {
   variant?: "default" | "outline"
   /** The organizer's auto-check add-on is on: read the receipt in the browser and send the text. */
   ocr: boolean
+  /** Just a small button, without the hint (e.g. "Replace" next to a sent receipt). */
+  compact?: boolean
   dict: Dictionary
 }
 
-export function ReceiptUpload({ registrationId, ocr, dict, label: idleLabel, variant = "default" }: Props) {
+export function ReceiptUpload({ registrationId, ocr, dict, label: idleLabel, variant = "default", compact = false }: Props) {
   const router = useRouter()
   const input = useRef<HTMLInputElement>(null)
   const [phase, setPhase] = useState<Phase>({ name: "idle" })
@@ -96,20 +98,20 @@ export function ReceiptUpload({ registrationId, ocr, dict, label: idleLabel, var
           : (idleLabel ?? t.uploadReceipt)
 
   return (
-    <Field data-invalid={!!error}>
+    <Field data-invalid={!!error} className="relative">
       <input
         ref={input}
         type="file"
         accept="image/jpeg,image/png,image/webp"
-        className="sr-only"
+        className="hidden"
         onChange={(e) => upload(e.target.files?.[0])}
         disabled={busy}
       />
-      <Button type="button" size="lg" variant={variant} onClick={() => input.current?.click()} disabled={busy} aria-live="polite">
+      <Button type="button" size={compact ? "sm" : "lg"} variant={variant} onClick={() => input.current?.click()} disabled={busy} aria-live="polite">
         <Upload />
         {label}
       </Button>
-      <FieldDescription>{ocr ? t.uploadHintOcr : t.uploadHint}</FieldDescription>
+      {!compact && <FieldDescription>{ocr ? t.uploadHintOcr : t.uploadHint}</FieldDescription>}
       {error && <FieldError>{error}</FieldError>}
     </Field>
   )

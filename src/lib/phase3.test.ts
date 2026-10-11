@@ -45,3 +45,16 @@ describe("paymentDetails", () => {
     expect(paymentDetails("Pay in cash at the door")).toEqual({ cards: [], links: [] })
   })
 })
+
+describe("where to pay", () => {
+  it("recognizes a card, a link and anything else", async () => {
+    const { describePaymentTo, cardLast4 } = await import("@/lib/payment-text")
+    expect(describePaymentTo("8600 1234-5678 9012")).toEqual({ kind: "card", display: "8600 1234 5678 9012", copy: "8600123456789012" })
+    expect(describePaymentTo("https://payme.uz/abc")).toMatchObject({ kind: "link", copy: "https://payme.uz/abc" })
+    expect(describePaymentTo("payme.uz/abc")).toMatchObject({ kind: "link", copy: "https://payme.uz/abc" })
+    expect(describePaymentTo("+998 90 123 45 67")).toMatchObject({ kind: "text" })
+    expect(describePaymentTo("  ")).toBeNull()
+    expect(cardLast4("8600 1234 5678 9012")).toBe("9012")
+    expect(cardLast4("payme.uz/abc")).toBeNull()
+  })
+})

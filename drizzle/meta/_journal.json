@@ -57,6 +57,13 @@
       "when": 1791744381358,
       "tag": "0007_profile",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791746954607,
+      "tag": "0008_payment_to_banner",
+      "breakpoints": true
     }
   ]
 }

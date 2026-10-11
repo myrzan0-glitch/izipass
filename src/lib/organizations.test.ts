@@ -29,7 +29,7 @@ const event = (slug: string): EventInput => ({
   venueUrl: "",
   capacity: 10,
   priceUzs: 0,
-  paymentInstructions: "",
+  paymentTo: "", paymentInstructions: "",
   holdMinutes: 30,
   registrationClosesBefore: 0,
 })

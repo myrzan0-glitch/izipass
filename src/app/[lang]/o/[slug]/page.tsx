@@ -63,7 +63,7 @@ async function OrganizerPage({ params }: { params: PageProps<"/[lang]/o/[slug]">
               </Link>
             </Button>
             <Button size="sm" variant="ghost" className="text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground" asChild>
-              <Link href={`/${lang}/dashboard/organizations/${organizer.id}`}>
+              <Link href={`/${lang}/dashboard/organizations/${organizer.id}/settings`}>
                 <Settings />
                 {dict.orgs.settings}
               </Link>
@@ -71,9 +71,15 @@ async function OrganizerPage({ params }: { params: PageProps<"/[lang]/o/[slug]">
           </div>
         </div>
       )}
-      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-10 px-4 pt-10 pb-16 sm:px-6">
+      {organizer.coverUrl && (
+        <div className="mx-auto w-full max-w-5xl px-4 pt-6 sm:px-6">
+          {/* eslint-disable-next-line @next/next/no-img-element -- our own resized image */}
+          <img src={organizer.coverUrl} alt="" className="aspect-[8/3] w-full rounded-xl border object-cover" />
+        </div>
+      )}
+      <main className={`mx-auto flex w-full max-w-3xl flex-1 flex-col gap-10 px-4 pb-16 sm:px-6 ${organizer.coverUrl ? "pt-0" : "pt-10"}`}>
         <section className="flex flex-col gap-4">
-          <Avatar className="size-20 rounded-2xl">
+          <Avatar className={`size-20 rounded-2xl ${organizer.coverUrl ? "-mt-10 border-4 border-background" : ""}`}>
             {organizer.logoUrl && <AvatarImage src={organizer.logoUrl} alt="" className="object-cover" />}
             <AvatarFallback className="rounded-2xl bg-primary text-2xl font-semibold text-primary-foreground">{organizer.name.slice(0, 1).toUpperCase()}</AvatarFallback>
           </Avatar>

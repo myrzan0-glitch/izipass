@@ -6,7 +6,14 @@ import { Check, X } from "lucide-react"
 
 import { decideRegistrationAction } from "@/app/[lang]/dashboard/actions"
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import {
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogDescription,
+  ResponsiveDialogFooter,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+} from "@/components/responsive-dialog"
 import { Field, FieldLabel } from "@/components/ui/field"
 import { Textarea } from "@/components/ui/textarea"
 import type { Locale } from "@/lib/i18n/config"
@@ -58,22 +65,22 @@ export function ReceiptReview({ lang, eventId, registration, receiptId, expected
   )
 
   return (
-    <Dialog open={open} onOpenChange={(next) => !next && close()}>
-      <DialogContent className="flex max-h-[95svh] flex-col gap-4 sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>{fmt(t.receiptTitle, { name: registration.name })}</DialogTitle>
-          <DialogDescription className="flex flex-wrap gap-x-3">
+    <ResponsiveDialog open={open} onOpenChange={(next) => !next && close()}>
+      <ResponsiveDialogContent className="sm:max-w-lg">
+        <ResponsiveDialogHeader>
+          <ResponsiveDialogTitle>{fmt(t.receiptTitle, { name: registration.name })}</ResponsiveDialogTitle>
+          <ResponsiveDialogDescription className="flex flex-wrap justify-center gap-x-3 md:justify-start">
             <span>{registration.phone}</span>
             <span className="font-mono">{registration.referenceCode}</span>
             <span>
               {t.expected}: <span className="font-medium text-foreground">{expected}</span>
             </span>
-          </DialogDescription>
-        </DialogHeader>
+          </ResponsiveDialogDescription>
+        </ResponsiveDialogHeader>
 
         <div className="min-h-0 flex-1 overflow-auto rounded-md border bg-muted">
           {/* eslint-disable-next-line @next/next/no-img-element -- a private, per-request image */}
-          <img src={`/api/receipts/${receiptId}`} alt={t.receipt} className="mx-auto max-h-[55svh] w-auto object-contain" />
+          <img src={`/api/receipts/${receiptId}`} alt={t.receipt} className="mx-auto max-h-[50svh] w-auto object-contain" />
         </div>
         {check}
 
@@ -84,7 +91,7 @@ export function ReceiptReview({ lang, eventId, registration, receiptId, expected
               <FieldLabel htmlFor={reasonId}>{dict.confirm.rejectReason}</FieldLabel>
               <Textarea id={reasonId} name="reason" placeholder={dict.confirm.rejectReasonPlaceholder} maxLength={200} rows={2} autoFocus />
             </Field>
-            <DialogFooter>
+            <ResponsiveDialogFooter>
               <Button type="button" variant="outline" onClick={() => setRejecting(false)}>
                 {dict.confirm.keep}
               </Button>
@@ -92,10 +99,10 @@ export function ReceiptReview({ lang, eventId, registration, receiptId, expected
                 <X />
                 {dict.confirm.rejectConfirm}
               </Button>
-            </DialogFooter>
+            </ResponsiveDialogFooter>
           </form>
         ) : (
-          <DialogFooter>
+          <ResponsiveDialogFooter>
             {pending ? (
               <>
                 <Button type="button" variant="outline" onClick={() => setRejecting(true)}>
@@ -115,9 +122,9 @@ export function ReceiptReview({ lang, eventId, registration, receiptId, expected
                 {t.close}
               </Button>
             )}
-          </DialogFooter>
+          </ResponsiveDialogFooter>
         )}
-      </DialogContent>
-    </Dialog>
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   )
 }

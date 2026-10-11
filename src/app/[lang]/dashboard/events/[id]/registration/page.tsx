@@ -45,7 +45,7 @@ async function Content({ params, searchParams }: PageProps<"/[lang]/dashboard/ev
         {organizer.autoCheck ? fmt(t.autoCheckOn, { price: formatMoney(AUTO_CHECK_PRICE_UZS, lang) }) : t.autoCheckOff}
       </p>
       <FieldDescription>
-        <Link href={`/${lang}/dashboard/organizations/${organizer.id}?tab=payments`}>{t.autoCheckChange}</Link>
+        <Link href={`/${lang}/dashboard/organizations/${organizer.id}/payments`}>{t.autoCheckChange}</Link>
       </FieldDescription>
     </Field>
   )

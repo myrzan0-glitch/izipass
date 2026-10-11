@@ -5,7 +5,14 @@ import { useState } from "react"
 import { LoginForm } from "@/components/login-form"
 import { RegisterForm } from "@/components/register-form"
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import {
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogDescription,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+  ResponsiveDialogTrigger,
+} from "@/components/responsive-dialog"
 import type { ActionState } from "@/app/[lang]/dashboard/actions"
 import type { Locale } from "@/lib/i18n/config"
 import type { Dictionary } from "@/lib/i18n/dictionaries/en"
@@ -31,11 +38,11 @@ type Props = {
 /** A Register button anywhere inside RegisterDialog; all of them open the same dialog. */
 export function RegisterTrigger({ label, className }: { label: string; className?: string }) {
   return (
-    <DialogTrigger asChild>
+    <ResponsiveDialogTrigger asChild>
       <Button size="lg" className={cn(className)}>
         {label}
       </Button>
-    </DialogTrigger>
+    </ResponsiveDialogTrigger>
   )
 }
 
@@ -47,13 +54,13 @@ export function RegisterDialog({ lang, organizerSlug, eventSlug, summary, person
   const [open, setOpen] = useState(defaultOpen)
   const back = `/${lang}/o/${organizerSlug}/${eventSlug}?register=1`
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <ResponsiveDialog open={open} onOpenChange={setOpen}>
       {children}
-      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>{dict.guest.signInTitle}</DialogTitle>
-          <DialogDescription>{summary}</DialogDescription>
-        </DialogHeader>
+      <ResponsiveDialogContent>
+        <ResponsiveDialogHeader>
+          <ResponsiveDialogTitle>{dict.guest.signInTitle}</ResponsiveDialogTitle>
+          <ResponsiveDialogDescription>{summary}</ResponsiveDialogDescription>
+        </ResponsiveDialogHeader>
         {person ? (
           <>
             <p className="text-sm text-muted-foreground">{dict.guest.detailsHint}</p>
@@ -65,7 +72,7 @@ export function RegisterDialog({ lang, organizerSlug, eventSlug, summary, person
             <LoginForm lang={lang} next={back} bot={bot} dict={dict.login} />
           </>
         )}
-      </DialogContent>
-    </Dialog>
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   )
 }

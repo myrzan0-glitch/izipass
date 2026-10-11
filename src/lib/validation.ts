@@ -55,6 +55,7 @@ export const eventSchema = z
     venueUrl: z.union([link, z.literal("")]).default(""),
     capacity: z.number().int().min(1, "min1").max(10_000, "tooLarge"),
     priceUzs: z.number().int().min(0, "min0").max(100_000_000, "tooLarge"),
+    paymentTo: z.string().trim().max(200, "tooLong").default(""),
     paymentInstructions: z.string().trim().max(1000, "tooLong").default(""),
     holdMinutes: z.number().int().refine((n) => (HOLD_MINUTES as readonly number[]).includes(n), "invalid"),
     registrationClosesBefore: z
@@ -64,7 +65,7 @@ export const eventSchema = z
       .default(0),
   })
   .refine((e) => !e.endsAt || e.endsAt > e.startsAt, { message: "endsBeforeStart", path: ["endsAt"] })
-  .refine((e) => e.priceUzs === 0 || e.paymentInstructions.length > 0, { message: "paymentRequired", path: ["paymentInstructions"] })
+  .refine((e) => e.priceUzs === 0 || e.paymentTo.length > 0 || e.paymentInstructions.length > 0, { message: "paymentRequired", path: ["paymentTo"] })
 export type EventInput = z.infer<typeof eventSchema>
 
 /** "+998 90 123-45-67" → "+998901234567". */

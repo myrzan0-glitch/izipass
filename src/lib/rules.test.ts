@@ -21,7 +21,7 @@ const people: schema.User[] = []
 const input = { name: "A", phone: "+998901234567", note: "" }
 const base: EventInput = {
   slug: "x", title: "X", description: "", startsAt: new Date(Date.now() + 7 * 86_400_000), endsAt: null, venue: "", venueUrl: "",
-  capacity: 1, priceUzs: 50_000, paymentInstructions: "card", holdMinutes: 30, registrationClosesBefore: 0,
+  capacity: 1, priceUzs: 50_000, paymentTo: "", paymentInstructions: "card", holdMinutes: 30, registrationClosesBefore: 0,
 }
 
 beforeAll(async () => {

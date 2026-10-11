@@ -32,7 +32,7 @@ const base: EventInput = {
   venueUrl: "",
   capacity: 20,
   priceUzs: 100_000,
-  paymentInstructions: "Click: 8600 ...",
+  paymentTo: "", paymentInstructions: "Click: 8600 ...",
   holdMinutes: 30,
     registrationClosesBefore: 0,
 }

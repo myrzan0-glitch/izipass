@@ -63,3 +63,17 @@ export async function setCover(db: Db, organizerId: string, eventId: string, fil
   await removeOld(db, organizerId, event.coverUrl)
   return { url }
 }
+
+/** Sets (or clears) an organization's wide cover; the previous image is deleted. */
+export async function setOrganizerCover(db: Db, organizerId: string, file: { contentType: string; data: Buffer } | null) {
+  const [organizer] = await db.select({ coverUrl: organizers.coverUrl }).from(organizers).where(eq(organizers.id, organizerId)).limit(1)
+  if (!organizer) return null
+  let url: string | null = null
+  if (file) {
+    const [row] = await db.insert(images).values({ organizerId, kind: "cover", ...file }).returning({ id: images.id })
+    url = imageUrl(row.id)
+  }
+  await db.update(organizers).set({ coverUrl: url }).where(eq(organizers.id, organizerId))
+  await removeOld(db, organizerId, organizer.coverUrl)
+  return { url }
+}

@@ -67,7 +67,7 @@ async function Content({ lang, dict }: { lang: Locale; dict: Dictionary }) {
     >
       <div className="grid gap-4 md:grid-cols-2">
         {rows.map(({ organizer, upcoming, used, limits }) => (
-          <Card key={organizer.id}>
+          <Card key={organizer.id} className="relative transition-colors hover:bg-accent/40">
             <CardHeader className="flex items-center gap-4">
               <Avatar className="size-12 rounded-lg">
                 {organizer.logoUrl && <AvatarImage src={organizer.logoUrl} alt="" />}
@@ -76,7 +76,12 @@ async function Content({ lang, dict }: { lang: Locale; dict: Dictionary }) {
                 </AvatarFallback>
               </Avatar>
               <div className="flex min-w-0 flex-col gap-1">
-                <CardTitle className="truncate text-lg">{organizer.name}</CardTitle>
+                <CardTitle className="truncate text-lg">
+                  {/* The whole card opens the organization; the buttons below sit above this link. */}
+                  <Link href={`/${lang}/dashboard/organizations/${organizer.id}`} className="after:absolute after:inset-0 after:rounded-xl">
+                    {organizer.name}
+                  </Link>
+                </CardTitle>
                 <CardDescription className="truncate font-mono text-xs">
                   {host}/o/{organizer.slug}
                 </CardDescription>
@@ -87,7 +92,7 @@ async function Content({ lang, dict }: { lang: Locale; dict: Dictionary }) {
               <Badge variant="outline">{fmt(t.upcoming, { n: upcoming })}</Badge>
               <Badge variant="secondary">{fmt(t.usage, { plan: dict.plans[limits.plan], used, limit: limits.eventsPerMonth })}</Badge>
             </CardContent>
-            <CardFooter className="mt-auto flex flex-wrap gap-2">
+            <CardFooter className="relative z-10 mt-auto flex flex-wrap gap-2">
               <Button size="sm" asChild>
                 <Link href={`/${lang}/dashboard/events/new?org=${organizer.id}`}>
                   <Plus />
@@ -101,7 +106,7 @@ async function Content({ lang, dict }: { lang: Locale; dict: Dictionary }) {
                 </Link>
               </Button>
               <Button variant="ghost" size="sm" asChild>
-                <Link href={`/${lang}/dashboard/organizations/${organizer.id}`}>
+                <Link href={`/${lang}/dashboard/organizations/${organizer.id}/settings`}>
                   <Settings />
                   {t.settings}
                 </Link>

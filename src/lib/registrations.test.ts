@@ -50,7 +50,7 @@ beforeAll(async () => {
     venueUrl: "",
     capacity: 2,
     priceUzs: 100_000,
-    paymentInstructions: "Click",
+    paymentTo: "", paymentInstructions: "Click",
     holdMinutes: 30,
     registrationClosesBefore: 0,
   })

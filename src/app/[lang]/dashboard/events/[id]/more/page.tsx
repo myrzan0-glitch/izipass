@@ -106,7 +106,7 @@ async function Content({ params, searchParams }: PageProps<"/[lang]/dashboard/ev
             <CardDescription>{organizer.name}</CardDescription>
             <CardAction>
               <Button variant="outline" asChild>
-                <Link href={`/${lang}/dashboard/organizations/${organizer.id}`}>
+                <Link href={`/${lang}/dashboard/organizations/${organizer.id}/settings`}>
                   <Settings />
                   {dict.orgs.settings}
                 </Link>

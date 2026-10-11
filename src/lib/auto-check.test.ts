@@ -42,7 +42,7 @@ beforeAll(async () => {
     venueUrl: "",
     capacity: 10,
     priceUzs: 50_000,
-    paymentInstructions: "card",
+    paymentTo: "", paymentInstructions: "card",
     holdMinutes: 30,
     registrationClosesBefore: 0,
   })

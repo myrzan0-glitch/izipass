@@ -232,6 +232,7 @@ export async function duplicateEvent(db: Db, organizer: Organizer, eventId: stri
     venueUrl: source.venueUrl ?? "",
     capacity: Math.min(source.capacity, planLimits(organizer).participantsPerEvent),
     priceUzs: source.priceUzs,
+    paymentTo: source.paymentTo,
     paymentInstructions: source.paymentInstructions,
     holdMinutes: source.holdMinutes,
     registrationClosesBefore: source.registrationClosesBefore,
@@ -258,4 +259,15 @@ export async function getPublicEventById(db: Db, eventId: string) {
     .where(and(eq(events.id, eventId), ne(events.status, "draft")))
     .limit(1)
   return row ?? null
+}
+
+/** Where the organization's latest event took payments, to fill in the next one. */
+export async function lastPaymentDetails(db: Db, organizerId: string) {
+  const [row] = await db
+    .select({ paymentTo: events.paymentTo, paymentInstructions: events.paymentInstructions })
+    .from(events)
+    .where(and(eq(events.organizerId, organizerId), gt(events.priceUzs, 0)))
+    .orderBy(desc(events.createdAt))
+    .limit(1)
+  return row ?? { paymentTo: "", paymentInstructions: "" }
 }
