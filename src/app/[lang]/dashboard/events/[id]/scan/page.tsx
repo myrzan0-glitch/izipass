@@ -5,9 +5,7 @@ import { notFound } from "next/navigation"
 import { DashboardShell } from "@/components/dashboard-shell"
 import { PageSkeleton } from "@/components/page-skeleton"
 import { Scanner } from "@/components/scanner"
-import { requireOrganizer } from "@/lib/auth/current"
-import { db } from "@/lib/db"
-import { getEvent } from "@/lib/events"
+import { requireEventAccess } from "@/lib/auth/current"
 import { isLocale } from "@/lib/i18n/config"
 import { getDictionary } from "@/lib/i18n/dictionaries"
 
@@ -21,9 +19,7 @@ async function Content({ params }: { params: PageProps<"/[lang]/dashboard/events
   const { lang, id } = await params
   if (!isLocale(lang)) notFound()
   const dict = await getDictionary(lang)
-  const { organizer } = await requireOrganizer(lang, `/${lang}/dashboard/events/${id}/scan`)
-  const event = await getEvent(db(), organizer.id, id)
-  if (!event) notFound()
+  const { event } = await requireEventAccess(lang, id, `/${lang}/dashboard/events/${id}/scan`)
 
   return (
     <DashboardShell
@@ -31,7 +27,9 @@ async function Content({ params }: { params: PageProps<"/[lang]/dashboard/events
       dict={dict}
       title={dict.scan.title}
       description={event.title}
-      back={{ href: `/${lang}/dashboard/events/${event.id}/registrations`, label: dict.registrations.title }}
+      active="events"
+      width="narrow"
+      back={{ href: `/${lang}/dashboard/events/${event.id}/guests`, label: dict.manage.tabs.guests }}
     >
       <div className="mx-auto w-full max-w-lg">
         <Scanner lang={lang} eventId={event.id} eventTitle={event.title} dict={dict} />

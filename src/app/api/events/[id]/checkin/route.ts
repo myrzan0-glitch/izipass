@@ -2,8 +2,7 @@ import { z } from "zod"
 
 import { getSession } from "@/lib/auth/session"
 import { db } from "@/lib/db"
-import { getEvent } from "@/lib/events"
-import { getOrganizerForUser } from "@/lib/organizers"
+import { getEventForMember } from "@/lib/organizers"
 import { CheckInError, checkIn, undoCheckIn } from "@/lib/registrations"
 import { parseTicketToken } from "@/lib/tickets"
 
@@ -18,9 +17,8 @@ const bodySchema = z.object({
 export async function POST(request: Request, { params }: RouteContext<"/api/events/[id]/checkin">) {
   const session = await getSession()
   if (!session) return Response.json({ error: "unauthorized" }, { status: 401 })
-  const organizer = await getOrganizerForUser(db(), session.userId)
   const { id } = await params
-  const event = organizer && (await getEvent(db(), organizer.id, id))
+  const event = (await getEventForMember(db(), session.userId, id))?.event
   if (!event) return Response.json({ error: "notFound" }, { status: 404 })
 
   const parsed = bodySchema.safeParse(await request.json().catch(() => null))

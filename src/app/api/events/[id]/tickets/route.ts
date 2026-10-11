@@ -1,7 +1,6 @@
 import { getSession } from "@/lib/auth/session"
 import { db } from "@/lib/db"
-import { getEvent } from "@/lib/events"
-import { getOrganizerForUser } from "@/lib/organizers"
+import { getEventForMember } from "@/lib/organizers"
 import { expireHolds, listEventRegistrations } from "@/lib/registrations"
 import { ticketToken } from "@/lib/tickets"
 import { notifyLater } from "@/lib/telegram/notify"
@@ -22,9 +21,8 @@ export type ScanTicket = {
 export async function GET(_request: Request, { params }: RouteContext<"/api/events/[id]/tickets">) {
   const session = await getSession()
   if (!session) return Response.json({ error: "unauthorized" }, { status: 401 })
-  const organizer = await getOrganizerForUser(db(), session.userId)
   const { id } = await params
-  const event = organizer && (await getEvent(db(), organizer.id, id))
+  const event = (await getEventForMember(db(), session.userId, id))?.event
   if (!event) return Response.json({ error: "notFound" }, { status: 404 })
 
   await expireHolds(db(), event.id)

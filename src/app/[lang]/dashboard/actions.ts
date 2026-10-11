@@ -1,8 +1,11 @@
 "use server"
 
+import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
 
-import { getSession } from "@/lib/auth/session"
+import { clearedSessionCookie, getSession } from "@/lib/auth/session"
+import { deleteAccount, updateProfile } from "@/lib/auth/users"
+import type { Event, Organizer } from "@/lib/db/schema"
 import { db } from "@/lib/db"
 import {
   EventRuleError,
@@ -11,19 +14,28 @@ import {
   createEvent,
   deleteDraft,
   duplicateEvent,
-  getEvent,
   liveRegistrationCount,
   setEventStatus,
   updateEvent,
 } from "@/lib/events"
 import { DEFAULT_LOCALE, isLocale } from "@/lib/i18n/config"
-import { SlugTakenError, createOrganizer, getOrganizerForUser, updateOrganizer, updatePaymentSettings } from "@/lib/organizers"
+import { IMAGE_MAX_BYTES, IMAGE_TYPES, setCover } from "@/lib/images"
+import {
+  SlugTakenError,
+  createOrganizer,
+  createOrganizerFromName,
+  getEventForMember,
+  getMemberOrganizer,
+  listOrganizersForUser,
+  updateOrganizer,
+  updatePaymentSettings,
+} from "@/lib/organizers"
 import { RegistrationError, decide, nextToReview } from "@/lib/registrations"
 import { SITE_URL } from "@/lib/site"
 import { telegramApiFromEnv } from "@/lib/telegram/api"
 import { connectWebhook } from "@/lib/telegram/webhook"
 import { fromLocalInput } from "@/lib/time"
-import { eventSchema, fieldErrors, organizerSchema, paymentSettingsSchema } from "@/lib/validation"
+import { eventSchema, fieldErrors, organizerSchema, paymentSettingsSchema, profileSchema } from "@/lib/validation"
 import { notifyLater } from "@/lib/telegram/notify"
 
 /** Field → error key (under `errors` in the dictionary). `form` is a general error. */
@@ -53,6 +65,22 @@ async function currentUserId() {
   return session.userId
 }
 
+/** The event from the form, when the signed-in person is a member of its organization. */
+async function eventAccess(form: FormData): Promise<{ userId: string; event: Event; organizer: Organizer }> {
+  const userId = await currentUserId()
+  const access = await getEventForMember(db(), userId, str(form, "eventId"))
+  if (!access) redirect(`/${langOf(form)}/dashboard`)
+  return { userId, ...access }
+}
+
+/** The organization from the form, when the signed-in person is a member of it. */
+async function organizerAccess(form: FormData): Promise<{ userId: string; organizer: Organizer }> {
+  const userId = await currentUserId()
+  const organizer = await getMemberOrganizer(db(), userId, str(form, "organizerId"))
+  if (!organizer) redirect(`/${langOf(form)}/dashboard/organizations`)
+  return { userId, organizer }
+}
+
 function parseOrganizer(form: FormData) {
   const links = str(form, "links")
     .split(/\r?\n/)
@@ -66,30 +94,34 @@ function parseOrganizer(form: FormData) {
   })
 }
 
+/** Creates an organization (no organizerId) or updates one the person is a member of. */
 export async function saveOrganizerAction(_prev: ActionState, form: FormData): Promise<ActionState> {
   const lang = langOf(form)
   const userId = await currentUserId()
   const parsed = parseOrganizer(form)
   if (!parsed.success) return { errors: fieldErrors(parsed.error), values: values(form) }
 
-  let existing
+  const organizerId = str(form, "organizerId")
+  let saved
   try {
-    existing = await getOrganizerForUser(db(), userId)
-    if (existing) await updateOrganizer(db(), existing.id, parsed.data)
-    else await createOrganizer(db(), userId, parsed.data)
+    if (organizerId) {
+      const existing = await getMemberOrganizer(db(), userId, organizerId)
+      if (!existing) return { errors: { form: "notFound" }, values: values(form) }
+      saved = await updateOrganizer(db(), existing.id, parsed.data)
+    } else {
+      saved = await createOrganizer(db(), userId, parsed.data)
+    }
   } catch (error) {
     if (error instanceof SlugTakenError) return { errors: { slug: "slugTaken" }, values: values(form) }
     throw error
   }
-  redirect(existing ? `/${lang}/dashboard/organizer?saved=1` : `/${lang}/dashboard`)
+  redirect(organizerId ? `/${lang}/dashboard/organizations/${saved.id}?saved=1` : `/${lang}/dashboard/organizations`)
 }
 
 /** Organizer settings → Payments: auto-check add-on and payout card details. */
 export async function savePaymentSettingsAction(_prev: ActionState, form: FormData): Promise<ActionState> {
   const lang = langOf(form)
-  const userId = await currentUserId()
-  const organizer = await getOrganizerForUser(db(), userId)
-  if (!organizer) redirect(`/${lang}/dashboard`)
+  const { organizer } = await organizerAccess(form)
   const parsed = paymentSettingsSchema.safeParse({
     autoCheck: str(form, "autoCheck") === "on",
     autoApprove: str(form, "autoApprove") === "on",
@@ -98,16 +130,14 @@ export async function savePaymentSettingsAction(_prev: ActionState, form: FormDa
   })
   if (!parsed.success) return { errors: fieldErrors(parsed.error), values: values(form) }
   await updatePaymentSettings(db(), organizer.id, parsed.data)
-  redirect(`/${lang}/dashboard/organizer?tab=payments&saved=1`)
+  redirect(`/${lang}/dashboard/organizations/${organizer.id}?tab=payments&saved=1`)
 }
 
 /** Copies an event as a draft a week later (weekly clubs). */
 export async function duplicateEventAction(form: FormData) {
   const lang = langOf(form)
-  const userId = await currentUserId()
-  const organizer = await getOrganizerForUser(db(), userId)
-  if (!organizer) redirect(`/${lang}/dashboard`)
-  const eventId = str(form, "eventId")
+  const { organizer, event } = await eventAccess(form)
+  const eventId = event.id
   let copyId: string | null = null
   try {
     copyId = (await duplicateEvent(db(), organizer, eventId))?.id ?? null
@@ -136,21 +166,42 @@ function parseEvent(form: FormData) {
   })
 }
 
+/** Where a saved event form returns: the tab it was opened from. */
+const RETURN_TABS = new Set(["registration", "more"])
+
+/**
+ * Creates or updates an event. A new event goes to one of the person's
+ * organizations, or, for their first event, to a new one made from a name.
+ */
 export async function saveEventAction(_prev: ActionState, form: FormData): Promise<ActionState> {
   const lang = langOf(form)
   const userId = await currentUserId()
-  const organizer = await getOrganizerForUser(db(), userId)
-  if (!organizer) redirect(`/${lang}/dashboard`)
 
   const parsed = parseEvent(form)
   if (!parsed.success) return { errors: fieldErrors(parsed.error), values: values(form) }
 
   const eventId = str(form, "eventId")
-  const existing = eventId ? await getEvent(db(), organizer.id, eventId) : null
-  if (eventId && !existing) return { errors: { form: "notFound" }, values: values(form) }
+  let organizer: Organizer | null = null
+  let existing: Event | null = null
+  if (eventId) {
+    const access = await getEventForMember(db(), userId, eventId)
+    if (!access) return { errors: { form: "notFound" }, values: values(form) }
+    ;({ organizer, event: existing } = access)
+  } else if (str(form, "organizerId")) {
+    organizer = await getMemberOrganizer(db(), userId, str(form, "organizerId"))
+    if (!organizer) return { errors: { form: "notFound" }, values: values(form) }
+  } else {
+    const name = str(form, "organizerName").trim()
+    if (name.length < 2) return { errors: { organizerName: "required" }, values: values(form) }
+    if (name.length > 60) return { errors: { organizerName: "tooLong" }, values: values(form) }
+    // Only for a first event: people with an organization pick it instead.
+    if ((await listOrganizersForUser(db(), userId)).length > 0) return { errors: { form: "generic" }, values: values(form) }
+  }
+
   let saved
   try {
     await checkEventInput(db(), parsed.data, existing)
+    organizer ??= await createOrganizerFromName(db(), userId, str(form, "organizerName").trim())
     saved = existing ? await updateEvent(db(), organizer, existing.id, parsed.data) : await createEvent(db(), organizer, parsed.data)
   } catch (error) {
     if (error instanceof SlugTakenError) return { errors: { slug: "slugTaken" }, values: values(form) }
@@ -161,6 +212,11 @@ export async function saveEventAction(_prev: ActionState, form: FormData): Promi
     throw error
   }
   if (!saved) return { errors: { form: "notFound" }, values: values(form) }
+  // Create event sends the cover with the form (already shrunk in the browser).
+  const cover = form.get("cover")
+  if (!existing && cover instanceof File && cover.size > 0 && IMAGE_TYPES.has(cover.type) && cover.size <= IMAGE_MAX_BYTES) {
+    await setCover(db(), organizer.id, saved.id, { contentType: cover.type, data: Buffer.from(await cover.arrayBuffer()) })
+  }
   // People already registered hear about a new date, time or place.
   if (
     existing &&
@@ -172,17 +228,16 @@ export async function saveEventAction(_prev: ActionState, form: FormData): Promi
   ) {
     notifyLater({ eventChanged: saved.id })
   }
-  redirect(`/${lang}/dashboard/events/${saved.id}`)
+  const tab = str(form, "returnTo")
+  redirect(`/${lang}/dashboard/events/${saved.id}${RETURN_TABS.has(tab) ? `/${tab}` : ""}${existing ? "?saved=1" : ""}`)
 }
 
 export async function setEventStatusAction(form: FormData) {
   const lang = langOf(form)
-  const userId = await currentUserId()
-  const organizer = await getOrganizerForUser(db(), userId)
-  if (!organizer) redirect(`/${lang}/dashboard`)
+  const { organizer, event: current } = await eventAccess(form)
   const status = str(form, "status")
   if (status !== "draft" && status !== "published" && status !== "cancelled") return
-  const eventId = str(form, "eventId")
+  const eventId = current.id
   let error: string | null = null
   try {
     const event = await setEventStatus(db(), organizer.id, eventId, status)
@@ -192,36 +247,31 @@ export async function setEventStatusAction(form: FormData) {
     else if (e instanceof EventRuleError) error = `${e.code}&n=${e.n}`
     else throw e
   }
-  redirect(`/${lang}/dashboard/events/${eventId}${error ? `?error=${error}` : ""}`)
+  const tab = str(form, "returnTo")
+  redirect(`/${lang}/dashboard/events/${eventId}${RETURN_TABS.has(tab) ? `/${tab}` : ""}${error ? `?error=${error}` : ""}`)
 }
 
 /** Deletes a draft nobody registered for. */
 export async function deleteDraftAction(form: FormData) {
   const lang = langOf(form)
-  const userId = await currentUserId()
-  const organizer = await getOrganizerForUser(db(), userId)
-  if (!organizer) redirect(`/${lang}/dashboard`)
-  const eventId = str(form, "eventId")
+  const { organizer, event } = await eventAccess(form)
+  const eventId = event.id
   try {
     if (await deleteDraft(db(), organizer.id, eventId)) redirect(`/${lang}/dashboard`)
   } catch (e) {
     if (!(e instanceof EventRuleError)) throw e
   }
-  redirect(`/${lang}/dashboard/events/${eventId}?error=hasRegistrations`)
+  redirect(`/${lang}/dashboard/events/${eventId}/more?error=hasRegistrations`)
 }
 
 /** Organizer approves or rejects a registration of one of their events. */
 export async function decideRegistrationAction(form: FormData) {
   const lang = langOf(form)
-  const userId = await currentUserId()
-  const organizer = await getOrganizerForUser(db(), userId)
-  if (!organizer) redirect(`/${lang}/dashboard`)
-  const eventId = str(form, "eventId")
+  // Only events of the person's organizations: `decide` matches on eventId.
+  const { userId, event } = await eventAccess(form)
+  const eventId = event.id
   const decision = str(form, "decision")
   if (decision !== "confirmed" && decision !== "rejected") return
-  // Only events of this organizer: `decide` matches on eventId, and the event must belong to them.
-  const event = await getEvent(db(), organizer.id, eventId)
-  if (!event) redirect(`/${lang}/dashboard`)
   const registrationId = str(form, "registrationId")
   try {
     await decide(db(), event.id, registrationId, decision, userId, str(form, "reason").slice(0, 200))
@@ -237,21 +287,54 @@ export async function decideRegistrationAction(form: FormData) {
     if (next) query.set("open", next)
   }
   const qs = query.toString()
-  redirect(`/${lang}/dashboard/events/${eventId}/registrations${qs ? `?${qs}` : ""}`)
+  redirect(`/${lang}/dashboard/events/${eventId}/guests${qs ? `?${qs}` : ""}`)
 }
 
 /** Organizer page: point the bot's webhook at this site again. */
 export async function reconnectTelegramAction(form: FormData) {
   const lang = langOf(form)
-  const userId = await currentUserId()
-  const organizer = await getOrganizerForUser(db(), userId)
+  const { organizer } = await organizerAccess(form)
   const api = telegramApiFromEnv()
-  if (organizer && api) {
+  if (api) {
     try {
       await connectWebhook(api, process.env.TELEGRAM_BOT_TOKEN ?? "", SITE_URL)
     } catch (error) {
       console.error("[telegram] reconnect failed", error)
     }
   }
-  redirect(`/${lang}/dashboard/organizer?tab=telegram`)
+  redirect(`/${lang}/dashboard/organizations/${organizer.id}?tab=telegram`)
+}
+
+/** More tab → Event link: change only the address. */
+export async function saveEventSlugAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  const lang = langOf(form)
+  const { event, organizer } = await eventAccess(form)
+  const parsed = eventSchema.safeParse({ ...event, venueUrl: event.venueUrl ?? "", slug: str(form, "slug") })
+  if (!parsed.success) return { errors: fieldErrors(parsed.error), values: values(form) }
+  try {
+    await updateEvent(db(), organizer, event.id, parsed.data)
+  } catch (error) {
+    if (error instanceof SlugTakenError) return { errors: { slug: "slugTaken" }, values: values(form) }
+    if (error instanceof PlanLimitError) return { errors: { slug: error.limit }, values: values(form) }
+    throw error
+  }
+  redirect(`/${lang}/dashboard/events/${event.id}/more?saved=1`)
+}
+
+/** Settings → Your profile. The language also switches the site to it. */
+export async function saveProfileAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  const userId = await currentUserId()
+  const parsed = profileSchema.safeParse({ name: str(form, "name"), phone: str(form, "phone"), locale: str(form, "locale") })
+  if (!parsed.success) return { errors: fieldErrors(parsed.error), values: values(form) }
+  await updateProfile(db(), userId, parsed.data)
+  redirect(`/${parsed.data.locale}/dashboard/settings?saved=1`)
+}
+
+/** Settings → Delete account. Owners of an organization can't (yet). */
+export async function deleteAccountAction(form: FormData) {
+  const lang = langOf(form)
+  const userId = await currentUserId()
+  if (!(await deleteAccount(db(), userId))) redirect(`/${lang}/dashboard/settings?error=ownsOrganization`)
+  ;(await cookies()).set(clearedSessionCookie())
+  redirect(`/${lang}`)
 }

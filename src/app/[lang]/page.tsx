@@ -49,7 +49,7 @@ export default async function Home({ params }: PageProps<"/[lang]">) {
         })}
       </section>
 
-      <section className="flex flex-col gap-6">
+      <section id="how" className="flex scroll-mt-6 flex-col gap-6">
         <h2 className="text-2xl font-semibold tracking-tight">{l.howTitle}</h2>
         <ol className="grid gap-4 sm:grid-cols-3">
           {([

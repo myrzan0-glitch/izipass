@@ -1,12 +1,17 @@
 "use client"
 
 import { useActionState, useState } from "react"
+import { Clock, MapPin } from "lucide-react"
 
+import { CoverPicker } from "@/components/cover-picker"
+import { OrgMark } from "@/components/org-mark"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
-import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field"
+import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Separator } from "@/components/ui/separator"
 import { Textarea } from "@/components/ui/textarea"
 import type { ActionState } from "@/app/[lang]/dashboard/actions"
 import type { Event } from "@/lib/db/schema"
@@ -17,11 +22,25 @@ import { slugify } from "@/lib/slug"
 import { toLocalInput } from "@/lib/time"
 import { CLOSES_BEFORE_MINUTES, HOLD_MINUTES } from "@/lib/validation"
 
+export type OrgOption = { id: string; name: string; slug: string; logoUrl: string | null; maxCapacity: number }
+
 type Props = {
   lang: Locale
   event: Event | null
-  organizerSlug: string
-  maxCapacity: number
+  /**
+   * all: Create event. details: Edit event (name, time, place, description).
+   * registration: the Registration tab (price, spots, payment, deadline).
+   */
+  section: "all" | "details" | "registration"
+  /** Organizations to create the event in; empty for a first event (a name is asked instead). */
+  organizers: OrgOption[]
+  defaultOrganizerId?: string
+  /** Spots allowed for a new organization (free plan). */
+  newOrgMaxCapacity: number
+  /** The tab a save returns to. */
+  returnTo?: "registration"
+  /** Shown in the Payment card of the Registration tab (auto-check status). */
+  paymentExtra?: React.ReactNode
   action: (prev: ActionState, form: FormData) => Promise<ActionState>
   dict: Dictionary
 }
@@ -32,7 +51,24 @@ function groupDigits(value: string) {
   return digits.replace(/\B(?=(\d{3})+(?!\d))/g, " ")
 }
 
-export function EventForm({ lang, event, organizerSlug, maxCapacity, action, dict }: Props) {
+/** A labelled line inside a card: label on the left, control on the right (stacked on phones). */
+function Row({ label, htmlFor, children }: { label: string; htmlFor?: string; children: React.ReactNode }) {
+  return (
+    <div className="grid gap-2 px-4 py-3 sm:grid-cols-[7rem_minmax(0,1fr)] sm:items-center sm:gap-4">
+      <FieldLabel htmlFor={htmlFor} className="text-muted-foreground">
+        {label}
+      </FieldLabel>
+      <div className="min-w-0">{children}</div>
+    </div>
+  )
+}
+
+/**
+ * The event form, laid out like the event page: cover on the left, the
+ * name big on top, then time, place, description and the ticket options.
+ * Fields a section doesn't show are sent as they are.
+ */
+export function EventForm({ lang, event, section, organizers, defaultOrganizerId, newOrgMaxCapacity, returnTo, paymentExtra, action, dict }: Props) {
   const [state, formAction, pending] = useActionState(action, null)
   const v = (key: string, fallback = "") => state?.values?.[key] ?? fallback
   const err = (key: string) => {
@@ -43,76 +79,277 @@ export function EventForm({ lang, event, organizerSlug, maxCapacity, action, dic
     return fmt(text, { n: code === "participantsPerEvent" ? maxCapacity : (n ?? "") })
   }
   const t = dict.event
+  const c = dict.create
 
+  const [organizerId, setOrganizerId] = useState(v("organizerId", event?.organizerId ?? defaultOrganizerId ?? organizers[0]?.id ?? ""))
+  const organizer = organizers.find((o) => o.id === organizerId)
+  const maxCapacity = organizer?.maxCapacity ?? newOrgMaxCapacity
   const [slug, setSlug] = useState(v("slug", event?.slug ?? ""))
   const [slugTouched, setSlugTouched] = useState(!!event)
+  const [slugOpen, setSlugOpen] = useState(!!err("slug"))
   const [price, setPrice] = useState(groupDigits(v("priceUzs", String(event?.priceUzs ?? 0))))
   const priceValue = Number(price.replace(/\D/g, "") || 0)
-  // The address is generated from the title; it opens for editing only on request or on an error.
-  const [slugOpen, setSlugOpen] = useState(!!err("slug"))
+
+  const showDetails = section !== "registration"
+  const showOptions = section !== "details"
+
+  // Values of the fields this section doesn't show.
+  const hidden = (name: string, value: string) => <input type="hidden" name={name} value={value} />
+  const detailsHidden = event && !showDetails && (
+    <>
+      {hidden("title", event.title)}
+      {hidden("slug", event.slug)}
+      {hidden("startsAt", toLocalInput(event.startsAt))}
+      {hidden("endsAt", event.endsAt ? toLocalInput(event.endsAt) : "")}
+      {hidden("venue", event.venue)}
+      {hidden("venueUrl", event.venueUrl ?? "")}
+      {hidden("description", event.description)}
+    </>
+  )
+  const optionsHidden = event && !showOptions && (
+    <>
+      {hidden("capacity", String(event.capacity))}
+      {hidden("priceUzs", String(event.priceUzs))}
+      {hidden("paymentInstructions", event.paymentInstructions)}
+      {hidden("holdMinutes", String(event.holdMinutes))}
+      {hidden("registrationClosesBefore", String(event.registrationClosesBefore))}
+    </>
+  )
+
+  const capacityField = (
+    <Field data-invalid={!!err("capacity")}>
+      <Input
+        id="capacity"
+        name="capacity"
+        type="number"
+        inputMode="numeric"
+        min={1}
+        max={maxCapacity}
+        defaultValue={v("capacity", String(event?.capacity ?? Math.min(20, maxCapacity)))}
+        aria-invalid={!!err("capacity")}
+        required
+      />
+      {err("capacity") ? <FieldError>{err("capacity")}</FieldError> : <FieldDescription>{fmt(t.capacityHint, { n: maxCapacity })}</FieldDescription>}
+    </Field>
+  )
+  const priceField = (
+    <Field data-invalid={!!err("priceUzs")}>
+      <div className="relative">
+        <Input
+          id="priceUzs"
+          name="priceUzs"
+          type="text"
+          inputMode="numeric"
+          autoComplete="off"
+          value={price}
+          onChange={(e) => setPrice(groupDigits(e.target.value))}
+          // Typing replaces the starting "0" instead of appending to it.
+          onFocus={(e) => e.currentTarget.select()}
+          aria-invalid={!!err("priceUzs")}
+          className="pr-14"
+          required
+        />
+        <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-muted-foreground">{dict.public.uzs}</span>
+      </div>
+      {err("priceUzs") ? <FieldError>{err("priceUzs")}</FieldError> : <FieldDescription>{t.priceHint}</FieldDescription>}
+    </Field>
+  )
+  const paymentField = (
+    <Field data-invalid={!!err("paymentInstructions")}>
+      <Textarea
+        id="paymentInstructions"
+        name="paymentInstructions"
+        rows={3}
+        defaultValue={v("paymentInstructions", event?.paymentInstructions ?? "")}
+        placeholder={t.paymentInstructionsPlaceholder}
+        maxLength={1000}
+        aria-invalid={!!err("paymentInstructions")}
+      />
+      {err("paymentInstructions") ? (
+        <FieldError>{err("paymentInstructions")}</FieldError>
+      ) : (
+        <FieldDescription>{t.paymentInstructionsHint}</FieldDescription>
+      )}
+    </Field>
+  )
+  const holdField = (
+    <Field data-invalid={!!err("holdMinutes")}>
+      <Select name="holdMinutes" defaultValue={v("holdMinutes", String(event?.holdMinutes ?? 30))}>
+        <SelectTrigger id="holdMinutes" className="w-full sm:w-60">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {HOLD_MINUTES.map((m) => (
+            <SelectItem key={m} value={String(m)}>
+              {fmt(t.minutes, { n: m })}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <FieldDescription>{t.holdMinutesHint}</FieldDescription>
+    </Field>
+  )
+  const closesField = (
+    <Field data-invalid={!!err("registrationClosesBefore")}>
+      <Select name="registrationClosesBefore" defaultValue={v("registrationClosesBefore", String(event?.registrationClosesBefore ?? 0))}>
+        <SelectTrigger id="registrationClosesBefore" className="w-full sm:w-60">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {CLOSES_BEFORE_MINUTES.map((m) => (
+            <SelectItem key={m} value={String(m)}>
+              {t.closesOptions[String(m) as keyof typeof t.closesOptions]}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <FieldDescription>{t.closesHint}</FieldDescription>
+    </Field>
+  )
+  // A free event still sends the hold time, so the form stays valid.
+  const holdHidden = priceValue <= 0 && hidden("holdMinutes", v("holdMinutes", String(event?.holdMinutes ?? 30)))
+
+  const submit = (
+    <>
+      {err("form") && <FieldError>{err("form")}</FieldError>}
+      <Button type="submit" size="lg" disabled={pending} className={section === "registration" ? "self-end" : "w-full"}>
+        {pending ? dict.common.saving : event ? c.saveChanges : t.create}
+      </Button>
+    </>
+  )
+
+  if (section === "registration") {
+    return (
+      <form action={formAction} noValidate className="flex flex-col gap-6">
+        {hidden("lang", lang)}
+        {event && hidden("eventId", event.id)}
+        {returnTo && hidden("returnTo", returnTo)}
+        {detailsHidden}
+        <Card>
+          <CardHeader>
+            <CardTitle>{dict.manage.ticketsTitle}</CardTitle>
+            <CardDescription>{dict.manage.ticketsHint}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <FieldGroup className="grid gap-6 sm:grid-cols-2">
+              <div className="flex flex-col gap-3">
+                <FieldLabel htmlFor="priceUzs">{c.ticketPrice}</FieldLabel>
+                {priceField}
+              </div>
+              <div className="flex flex-col gap-3">
+                <FieldLabel htmlFor="capacity">{t.capacity}</FieldLabel>
+                {capacityField}
+              </div>
+            </FieldGroup>
+          </CardContent>
+        </Card>
+        {priceValue > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>{dict.manage.paymentTitle}</CardTitle>
+              <CardDescription>{dict.manage.paymentHint}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <FieldGroup>
+                <div className="flex flex-col gap-3">
+                  <FieldLabel htmlFor="paymentInstructions">{t.paymentInstructions}</FieldLabel>
+                  {paymentField}
+                </div>
+                <div className="grid gap-6 sm:grid-cols-2">
+                  <div className="flex flex-col gap-3">
+                    <FieldLabel htmlFor="holdMinutes">{t.holdMinutes}</FieldLabel>
+                    {holdField}
+                  </div>
+                  {paymentExtra}
+                </div>
+              </FieldGroup>
+            </CardContent>
+          </Card>
+        )}
+        {priceValue <= 0 && hidden("paymentInstructions", v("paymentInstructions", event?.paymentInstructions ?? ""))}
+        {holdHidden}
+        <Card>
+          <CardHeader>
+            <CardTitle>{dict.manage.windowTitle}</CardTitle>
+            <CardDescription>{dict.manage.waitlistNote}</CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            <FieldLabel htmlFor="registrationClosesBefore">{t.closesBefore}</FieldLabel>
+            {closesField}
+          </CardContent>
+        </Card>
+        {submit}
+      </form>
+    )
+  }
 
   return (
-    <form action={formAction} noValidate>
-      <input type="hidden" name="lang" value={lang} />
-      {event && <input type="hidden" name="eventId" value={event.id} />}
-      <FieldGroup>
+    <form action={formAction} noValidate className="grid gap-8 md:grid-cols-[minmax(0,18rem)_minmax(0,1fr)] md:items-start">
+      {hidden("lang", lang)}
+      {event && hidden("eventId", event.id)}
+      {optionsHidden}
+
+      <div className="md:sticky md:top-20">
+        <CoverPicker endpoint={event ? `/api/events/${event.id}/cover` : null} url={event?.coverUrl ?? null} dict={dict} />
+      </div>
+
+      <FieldGroup className="gap-6">
+        {!event &&
+          (organizers.length > 0 ? (
+            <Field className="w-fit">
+              <FieldLabel htmlFor="organizerId" className="sr-only">
+                {c.organization}
+              </FieldLabel>
+              <Select name="organizerId" value={organizerId} onValueChange={setOrganizerId}>
+                <SelectTrigger id="organizerId" size="sm" className="border-0 bg-secondary shadow-none">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {organizers.map((o) => (
+                    <SelectItem key={o.id} value={o.id}>
+                      <OrgMark name={o.name} logoUrl={o.logoUrl} className="size-4" />
+                      {o.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+          ) : (
+            <Field data-invalid={!!err("organizerName")}>
+              <FieldLabel htmlFor="organizerName">{c.newOrganization}</FieldLabel>
+              <Input
+                id="organizerName"
+                name="organizerName"
+                defaultValue={v("organizerName")}
+                placeholder={c.newOrganizationPlaceholder}
+                maxLength={60}
+                aria-invalid={!!err("organizerName")}
+              />
+              {err("organizerName") ? <FieldError>{err("organizerName")}</FieldError> : <FieldDescription>{c.newOrganizationHint}</FieldDescription>}
+            </Field>
+          ))}
+
         <Field data-invalid={!!err("title")}>
-          <FieldLabel htmlFor="title">{t.title}</FieldLabel>
+          <FieldLabel htmlFor="title" className="sr-only">
+            {t.title}
+          </FieldLabel>
           <Input
             id="title"
             name="title"
             defaultValue={v("title", event?.title ?? "")}
-            placeholder={t.titlePlaceholder}
+            placeholder={c.namePlaceholder}
             maxLength={80}
             aria-invalid={!!err("title")}
             onChange={(e) => !slugTouched && setSlug(slugify(e.target.value))}
+            className="h-auto rounded-none border-0 bg-transparent px-0 py-1 text-3xl font-semibold tracking-tight shadow-none focus-visible:ring-0 md:text-4xl dark:bg-transparent"
             required
           />
           {err("title") && <FieldError>{err("title")}</FieldError>}
         </Field>
 
-        <Collapsible open={slugOpen} onOpenChange={setSlugOpen}>
-          <Field data-invalid={!!err("slug")}>
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-              <FieldLabel htmlFor="slug" className="text-muted-foreground">
-                {t.link}
-              </FieldLabel>
-              <span className="min-w-0 truncate font-mono text-xs text-muted-foreground">
-                /{lang}/o/{organizerSlug}/{slug || "…"}
-              </span>
-              {!slugOpen && (
-                <CollapsibleTrigger asChild>
-                  <Button type="button" variant="link" size="sm" className="h-auto px-0">
-                    {t.changeLink}
-                  </Button>
-                </CollapsibleTrigger>
-              )}
-            </div>
-            {/* Always submitted; the input is only shown when opened. */}
-            {!slugOpen && <input type="hidden" name="slug" value={slug} />}
-            <CollapsibleContent>
-              <Input
-                id="slug"
-                name="slug"
-                value={slug}
-                onChange={(e) => {
-                  setSlugTouched(true)
-                  setSlug(e.target.value)
-                }}
-                maxLength={48}
-                aria-invalid={!!err("slug")}
-                required
-              />
-            </CollapsibleContent>
-            {err("slug") && <FieldError>{err("slug")}</FieldError>}
-          </Field>
-        </Collapsible>
-
-        <FieldSet>
-          <FieldLegend>{t.sectionWhen}</FieldLegend>
-          <div className="grid gap-6 sm:grid-cols-2">
+        <Card className="gap-0 py-0">
+          <Row label={c.start} htmlFor="startsAt">
             <Field data-invalid={!!err("startsAt")}>
-              <FieldLabel htmlFor="startsAt">{t.startsAt}</FieldLabel>
               <Input
                 id="startsAt"
                 name="startsAt"
@@ -121,11 +358,12 @@ export function EventForm({ lang, event, organizerSlug, maxCapacity, action, dic
                 aria-invalid={!!err("startsAt")}
                 required
               />
-              <FieldDescription>{t.timeZoneHint}</FieldDescription>
               {err("startsAt") && <FieldError>{err("startsAt")}</FieldError>}
             </Field>
+          </Row>
+          <Separator />
+          <Row label={c.end} htmlFor="endsAt">
             <Field data-invalid={!!err("endsAt")}>
-              <FieldLabel htmlFor="endsAt">{t.endsAt}</FieldLabel>
               <Input
                 id="endsAt"
                 name="endsAt"
@@ -135,164 +373,134 @@ export function EventForm({ lang, event, organizerSlug, maxCapacity, action, dic
               />
               {err("endsAt") && <FieldError>{err("endsAt")}</FieldError>}
             </Field>
-          </div>
-        </FieldSet>
+          </Row>
+          <Separator />
+          <p className="flex items-center gap-2 px-4 py-3 text-sm text-muted-foreground">
+            <Clock className="size-4" />
+            {c.timeZone}
+          </p>
+        </Card>
 
-        <FieldSet>
-          <FieldLegend>{t.sectionPlace}</FieldLegend>
-          <FieldGroup>
+        <Card className="gap-0 py-0">
+          <Row label={c.location} htmlFor="venue">
             <Field data-invalid={!!err("venue")}>
-              <FieldLabel htmlFor="venue">{t.venue}</FieldLabel>
-              <Input
-                id="venue"
-                name="venue"
-                defaultValue={v("venue", event?.venue ?? "")}
-                placeholder={t.venuePlaceholder}
-                maxLength={160}
-              />
+              <Input id="venue" name="venue" defaultValue={v("venue", event?.venue ?? "")} placeholder={t.venuePlaceholder} maxLength={160} />
               {err("venue") && <FieldError>{err("venue")}</FieldError>}
             </Field>
-
+          </Row>
+          <Separator />
+          <Row label={c.mapLink} htmlFor="venueUrl">
             <Field data-invalid={!!err("venueUrl")}>
-              <FieldLabel htmlFor="venueUrl">{t.venueUrl}</FieldLabel>
-              <Input
-                id="venueUrl"
-                name="venueUrl"
-                type="url"
-                inputMode="url"
-                defaultValue={v("venueUrl", event?.venueUrl ?? "")}
-                placeholder="https://maps.app.goo.gl/…"
-                aria-invalid={!!err("venueUrl")}
-              />
+              <div className="relative">
+                <MapPin className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  id="venueUrl"
+                  name="venueUrl"
+                  type="url"
+                  inputMode="url"
+                  defaultValue={v("venueUrl", event?.venueUrl ?? "")}
+                  placeholder="https://maps.app.goo.gl/…"
+                  aria-invalid={!!err("venueUrl")}
+                  className="pl-9"
+                />
+              </div>
               {err("venueUrl") && <FieldError>{err("venueUrl")}</FieldError>}
             </Field>
-          </FieldGroup>
-        </FieldSet>
+          </Row>
+        </Card>
 
-        <FieldSet>
-          <FieldLegend>{t.sectionAbout}</FieldLegend>
-
-          <Field data-invalid={!!err("description")}>
-            <FieldLabel htmlFor="description" className="sr-only">
-              {t.description}
-            </FieldLabel>
-            <Textarea
-              id="description"
-              name="description"
-              rows={6}
-              defaultValue={v("description", event?.description ?? "")}
-              placeholder={t.descriptionPlaceholder}
-              maxLength={4000}
-            />
-            {err("description") && <FieldError>{err("description")}</FieldError>}
-          </Field>
-        </FieldSet>
-
-        <FieldSet>
-          <FieldLegend>{t.registration}</FieldLegend>
-          <FieldGroup>
-            <div className="grid gap-6 sm:grid-cols-2">
-              <Field data-invalid={!!err("capacity")}>
-                <FieldLabel htmlFor="capacity">{t.capacity}</FieldLabel>
-                <Input
-                  id="capacity"
-                  name="capacity"
-                  type="number"
-                  inputMode="numeric"
-                  min={1}
-                  max={maxCapacity}
-                  defaultValue={v("capacity", String(event?.capacity ?? Math.min(20, maxCapacity)))}
-                  aria-invalid={!!err("capacity")}
-                  required
-                />
-                <FieldDescription>{fmt(t.capacityHint, { n: maxCapacity })}</FieldDescription>
-                {err("capacity") && <FieldError>{err("capacity")}</FieldError>}
-              </Field>
-              <Field data-invalid={!!err("priceUzs")}>
-                <FieldLabel htmlFor="priceUzs">{t.price}</FieldLabel>
-                <Input
-                  id="priceUzs"
-                  name="priceUzs"
-                  type="text"
-                  inputMode="numeric"
-                  autoComplete="off"
-                  value={price}
-                  onChange={(e) => setPrice(groupDigits(e.target.value))}
-                  // Typing replaces the starting "0" instead of appending to it.
-                  onFocus={(e) => e.currentTarget.select()}
-                  aria-invalid={!!err("priceUzs")}
-                  required
-                />
-                <FieldDescription>{t.priceHint}</FieldDescription>
-                {err("priceUzs") && <FieldError>{err("priceUzs")}</FieldError>}
-              </Field>
-            </div>
-
-            {priceValue > 0 && (
-              <>
-                <Field data-invalid={!!err("paymentInstructions")}>
-                  <FieldLabel htmlFor="paymentInstructions">{t.paymentInstructions}</FieldLabel>
-                  <Textarea
-                    id="paymentInstructions"
-                    name="paymentInstructions"
-                    rows={3}
-                    defaultValue={v("paymentInstructions", event?.paymentInstructions ?? "")}
-                    placeholder={t.paymentInstructionsPlaceholder}
-                    maxLength={1000}
-                    aria-invalid={!!err("paymentInstructions")}
-                  />
-                  <FieldDescription>{t.paymentInstructionsHint}</FieldDescription>
-                  {err("paymentInstructions") && <FieldError>{err("paymentInstructions")}</FieldError>}
-                </Field>
-
-                <Field data-invalid={!!err("holdMinutes")}>
-                  <FieldLabel htmlFor="holdMinutes">{t.holdMinutes}</FieldLabel>
-                  <Select name="holdMinutes" defaultValue={v("holdMinutes", String(event?.holdMinutes ?? 30))}>
-                    <SelectTrigger id="holdMinutes" className="w-full sm:w-60">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {HOLD_MINUTES.map((m) => (
-                        <SelectItem key={m} value={String(m)}>
-                          {fmt(t.minutes, { n: m })}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FieldDescription>{t.holdMinutesHint}</FieldDescription>
-                  {err("holdMinutes") && <FieldError>{err("holdMinutes")}</FieldError>}
-                </Field>
-              </>
-            )}
-            {priceValue <= 0 && <input type="hidden" name="holdMinutes" value={String(event?.holdMinutes ?? 30)} />}
-
-            <Field data-invalid={!!err("registrationClosesBefore")}>
-              <FieldLabel htmlFor="registrationClosesBefore">{t.closesBefore}</FieldLabel>
-              <Select name="registrationClosesBefore" defaultValue={v("registrationClosesBefore", String(event?.registrationClosesBefore ?? 0))}>
-                <SelectTrigger id="registrationClosesBefore" className="w-full sm:w-60">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {CLOSES_BEFORE_MINUTES.map((m) => (
-                    <SelectItem key={m} value={String(m)}>
-                      {t.closesOptions[String(m) as keyof typeof t.closesOptions]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <FieldDescription>{t.closesHint}</FieldDescription>
-              {err("registrationClosesBefore") && <FieldError>{err("registrationClosesBefore")}</FieldError>}
-            </Field>
-          </FieldGroup>
-        </FieldSet>
-
-        {err("form") && <FieldError>{err("form")}</FieldError>}
-
-        <Field orientation="horizontal">
-          <Button type="submit" disabled={pending}>
-            {pending ? dict.common.saving : event ? dict.common.save : t.create}
-          </Button>
+        <Field data-invalid={!!err("description")}>
+          <FieldLabel htmlFor="description">{c.description}</FieldLabel>
+          <Textarea
+            id="description"
+            name="description"
+            rows={5}
+            defaultValue={v("description", event?.description ?? "")}
+            placeholder={t.descriptionPlaceholder}
+            maxLength={4000}
+          />
+          {err("description") && <FieldError>{err("description")}</FieldError>}
         </Field>
+
+        {showOptions && (
+          <div className="flex flex-col gap-3">
+            <h2 className="text-sm font-medium">{c.options}</h2>
+            <Card className="gap-0 py-0">
+              <Row label={c.ticketPrice} htmlFor="priceUzs">
+                {priceField}
+              </Row>
+              {priceValue > 0 && (
+                <>
+                  <Separator />
+                  <Row label={t.paymentInstructions} htmlFor="paymentInstructions">
+                    {paymentField}
+                  </Row>
+                </>
+              )}
+              <Separator />
+              <Row label={t.capacity} htmlFor="capacity">
+                {capacityField}
+              </Row>
+              <Separator />
+              <Row label={t.closesBefore} htmlFor="registrationClosesBefore">
+                {closesField}
+              </Row>
+              {priceValue > 0 && (
+                <>
+                  <Separator />
+                  <Row label={t.holdMinutes} htmlFor="holdMinutes">
+                    {holdField}
+                  </Row>
+                </>
+              )}
+            </Card>
+            {priceValue <= 0 && hidden("paymentInstructions", v("paymentInstructions", ""))}
+            {holdHidden}
+          </div>
+        )}
+
+        {section === "all" ? (
+          <Collapsible open={slugOpen} onOpenChange={setSlugOpen}>
+            <Field data-invalid={!!err("slug")}>
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <FieldLabel htmlFor="slug" className="text-muted-foreground">
+                  {t.link}
+                </FieldLabel>
+                <span className="min-w-0 truncate font-mono text-xs text-muted-foreground">
+                  /o/{organizer?.slug ?? "…"}/{slug || "…"}
+                </span>
+                {!slugOpen && (
+                  <CollapsibleTrigger asChild>
+                    <Button type="button" variant="link" size="sm" className="h-auto px-0">
+                      {t.changeLink}
+                    </Button>
+                  </CollapsibleTrigger>
+                )}
+              </div>
+              {/* Always submitted; the input is only shown when opened. */}
+              {!slugOpen && hidden("slug", slug)}
+              <CollapsibleContent>
+                <Input
+                  id="slug"
+                  name="slug"
+                  value={slug}
+                  onChange={(e) => {
+                    setSlugTouched(true)
+                    setSlug(e.target.value)
+                  }}
+                  maxLength={48}
+                  aria-invalid={!!err("slug")}
+                  required
+                />
+              </CollapsibleContent>
+              {err("slug") && <FieldError>{err("slug")}</FieldError>}
+            </Field>
+          </Collapsible>
+        ) : (
+          event && hidden("slug", event.slug)
+        )}
+
+        {submit}
       </FieldGroup>
     </form>
   )

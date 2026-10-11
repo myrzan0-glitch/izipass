@@ -9,16 +9,12 @@ import { db } from "@/lib/db"
 import { getPublicEvent } from "@/lib/events"
 import { DEFAULT_LOCALE, isLocale } from "@/lib/i18n/config"
 import { RegistrationError, cancelRegistration, register } from "@/lib/registrations"
-import { fieldErrors } from "@/lib/validation"
+import { fieldErrors, phoneSchema } from "@/lib/validation"
 import { notifyLater } from "@/lib/telegram/notify"
 
 const registerSchema = z.object({
   name: z.string().trim().min(2, "required").max(80, "tooLong"),
-  phone: z
-    .string()
-    .trim()
-    .transform((p) => p.replace(/[\s()-]/g, ""))
-    .pipe(z.string().regex(/^\+?\d{9,15}$/, "phone")),
+  phone: phoneSchema,
   note: z.string().trim().max(500, "tooLong").default(""),
 })
 

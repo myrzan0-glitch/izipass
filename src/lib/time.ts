@@ -63,3 +63,19 @@ export function formatDateRange(start: Date, end: Date | null, locale: Locale) {
   }
   return `${formatDateTime(start, locale)} – ${formatDateTime(end, locale)}`
 }
+
+/** "2026-11-05": the Tashkent calendar day, for grouping events by day. */
+export function localDay(date: Date) {
+  return toLocalInput(date).slice(0, 10)
+}
+
+/** "5 Nov", "Thursday", "19:00": the parts of the events timeline. */
+export function formatDayParts(date: Date, locale: Locale) {
+  const f = (options: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat(INTL_LOCALE[locale], { timeZone: TIME_ZONE, ...options }).format(date)
+  return {
+    day: f({ day: "numeric", month: "short" }),
+    weekday: f({ weekday: "long" }),
+    short: f({ weekday: "short", day: "numeric", month: "short" }),
+    time: f({ hour: "2-digit", minute: "2-digit", hourCycle: "h23" }),
+  }
+}

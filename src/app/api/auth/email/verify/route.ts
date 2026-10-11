@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 
 import { createSessionToken, sessionCookie } from "@/lib/auth/session"
 import { safeNext } from "@/lib/auth/tokens"
-import { consumeLoginToken } from "@/lib/auth/users"
+import { AccountLinkError, consumeLoginToken } from "@/lib/auth/users"
 import { db } from "@/lib/db"
 import { DEFAULT_LOCALE, isLocale } from "@/lib/i18n/config"
 
@@ -13,7 +13,13 @@ export async function GET(request: Request) {
   const lang = isLocale(langParam) ? langParam : DEFAULT_LOCALE
   const token = searchParams.get("token") ?? ""
 
-  const result = token ? await consumeLoginToken(db(), token, lang) : null
+  let result
+  try {
+    result = token ? await consumeLoginToken(db(), token, lang) : null
+  } catch (error) {
+    if (error instanceof AccountLinkError) return NextResponse.redirect(new URL(`/${lang}/dashboard/settings?error=${error.code}`, request.url))
+    throw error
+  }
   if (!result) return NextResponse.redirect(new URL(`/${lang}/login?error=expired`, request.url))
 
   const response = NextResponse.redirect(new URL(safeNext(result.next, `/${lang}/dashboard`), request.url))

@@ -14,13 +14,13 @@ import type { Dictionary } from "@/lib/i18n/dictionaries/en"
 import { SITE_NAME } from "@/lib/site"
 
 /** Reads the session cookie, so it streams in while the rest of the page is static. */
-async function AuthLink({ lang, dict }: { lang: Locale; dict: Dictionary["nav"] }) {
+async function AuthLink({ lang, dict }: { lang: Locale; dict: Dictionary }) {
   const session = await getSession()
   const user = session ? await getUser(db(), session.userId) : null
   if (!user) {
     return (
       <Button variant="ghost" size="sm" asChild>
-        <Link href={`/${lang}/login`}>{dict.signIn}</Link>
+        <Link href={`/${lang}/login`}>{dict.nav.signIn}</Link>
       </Button>
     )
   }
@@ -36,7 +36,7 @@ export function SiteHeader({ lang, dict }: { lang: Locale; dict: Dictionary }) {
       </Link>
       <nav className="flex items-center gap-1">
         <Suspense fallback={<Skeleton className="size-8 rounded-full" />}>
-          <AuthLink lang={lang} dict={dict.nav} />
+          <AuthLink lang={lang} dict={dict} />
         </Suspense>
         <LanguageSwitcher lang={lang} label={dict.language} />
         <ModeToggle dict={dict.theme} />

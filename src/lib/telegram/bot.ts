@@ -43,7 +43,7 @@ async function safely(promise: Promise<unknown>) {
 
 function receiptKeyboard(ctx: Ctx, locale: Locale, eventId: string, registrationId: string, pending: boolean): InlineKeyboard {
   const t = dictionaryFor(locale).bot
-  const open = [{ text: t.openRegistrations, url: `${ctx.siteUrl}/${locale}/dashboard/events/${eventId}/registrations` }]
+  const open = [{ text: t.openRegistrations, url: `${ctx.siteUrl}/${locale}/dashboard/events/${eventId}/guests` }]
   if (!pending) return { inline_keyboard: [open] }
   return {
     inline_keyboard: [

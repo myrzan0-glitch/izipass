@@ -2,257 +2,240 @@ import { Suspense } from "react"
 import type { Metadata } from "next"
 import Link from "next/link"
 import { notFound } from "next/navigation"
-import { ExternalLink, Plus } from "lucide-react"
+import { QrCode } from "lucide-react"
 
 import { DashboardShell } from "@/components/dashboard-shell"
-import { EventStatusBadge, displayStatus } from "@/components/event-status"
+import { OrgMark } from "@/components/org-mark"
+import { OrganizeCard } from "@/components/organize-card"
+import { PageSkeleton } from "@/components/page-skeleton"
 import { RegistrationStatusBadge } from "@/components/registration-status"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { PageSkeleton } from "@/components/page-skeleton"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Card } from "@/components/ui/card"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { requireUser } from "@/lib/auth/current"
 import { db } from "@/lib/db"
-import { eventsThisMonth, listEvents, planLimits } from "@/lib/events"
+import type { Event, Organizer, Registration } from "@/lib/db/schema"
+import { listEventsForOrganizers } from "@/lib/events"
 import { isLocale, type Locale } from "@/lib/i18n/config"
 import { getDictionary } from "@/lib/i18n/dictionaries"
 import type { Dictionary } from "@/lib/i18n/dictionaries/en"
 import { fmt } from "@/lib/i18n/format"
-import { getOrganizerForUser } from "@/lib/organizers"
-import { AUTO_CHECK_PRICE_UZS } from "@/lib/db/schema"
-import { autoCheckUsage, listUserRegistrations, registrationCounts } from "@/lib/registrations"
-import { formatDateTime, formatMoney, startOfMonth } from "@/lib/time"
+import { listOrganizersForUser } from "@/lib/organizers"
+import { listUserRegistrations, registrationCounts, type EventCounts } from "@/lib/registrations"
+import { formatDayParts, formatMoney, localDay } from "@/lib/time"
 
 export async function generateMetadata({ params }: PageProps<"/[lang]/dashboard">): Promise<Metadata> {
   const { lang } = await params
   if (!isLocale(lang)) return {}
-  return { title: (await getDictionary(lang)).dashboard.title, robots: { index: false } }
+  return { title: (await getDictionary(lang)).app.events, robots: { index: false } }
 }
 
-type Mine = Awaited<ReturnType<typeof listUserRegistrations>>
+/** An event shows under Upcoming until six hours after its start. */
+const ONGOING_MS = 6 * 3_600_000
 
-/** The person's own registrations: upcoming (soonest first), then past. */
-function MyTickets({ lang, dict, mine, now }: { lang: Locale; dict: Dictionary; mine: Mine; now: Date }) {
-  const cutoff = now.getTime() - 6 * 3_600_000
-  const upcoming = mine.filter((r) => r.event.startsAt.getTime() >= cutoff).reverse()
-  const past = mine.filter((r) => r.event.startsAt.getTime() < cutoff)
-  const item = ({ registration, event }: Mine[number], dim = false) => (
-    <Link
-      key={registration.id}
-      href={`/${lang}/r/${registration.id}`}
-      className={`flex items-center justify-between gap-4 rounded-md border p-3 text-sm hover:bg-accent/40 ${dim ? "opacity-70" : ""}`}
-    >
-      <span className="flex min-w-0 flex-col">
-        <span className="truncate font-medium">{event.title}</span>
-        <span className="text-muted-foreground">{formatDateTime(event.startsAt, lang)}</span>
-      </span>
-      <RegistrationStatusBadge status={registration.status} dict={dict.registrationStatus} />
-    </Link>
-  )
+/** Statuses a guest still cares about; expired and cancelled registrations drop off. */
+const GUEST_VISIBLE: Registration["status"][] = ["held", "proof_sent", "confirmed", "waitlist", "rejected"]
+
+type Item =
+  | { kind: "host"; event: Event; organizer: Organizer; counts?: EventCounts }
+  | { kind: "guest"; event: Event; organizer: Organizer; registration: Registration }
+
+function HostCard({ lang, dict, event, organizer, counts }: Extract<Item, { kind: "host" }> & { lang: Locale; dict: Dictionary }) {
+  const t = dict.app
+  const manage = `/${lang}/dashboard/events/${event.id}`
+  const review = counts?.review ?? 0
   return (
-    <Card id="tickets" className="gap-4 scroll-mt-6">
-      <CardHeader>
-        <CardTitle>{dict.dashboard.myTickets}</CardTitle>
-        {mine.length === 0 && <CardDescription>{dict.dashboard.noTickets}</CardDescription>}
-      </CardHeader>
-      {mine.length > 0 && (
-        <CardContent className="flex flex-col gap-3">
-          {upcoming.map((r) => item(r))}
-          {past.length > 0 && <p className="pt-2 text-xs font-medium text-muted-foreground">{dict.dashboard.past}</p>}
-          {past.map((r) => item(r, true))}
-        </CardContent>
+    <>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-sm text-muted-foreground tabular-nums">{formatDayParts(event.startsAt, lang).time}</span>
+        <Badge>{t.hosting}</Badge>
+        {event.status === "draft" && <Badge variant="secondary">{dict.event.status.draft}</Badge>}
+        {event.status === "cancelled" && <Badge variant="destructive">{dict.event.status.cancelled}</Badge>}
+      </div>
+      <Link href={manage} className="text-lg font-semibold hover:underline">
+        {event.title}
+      </Link>
+      <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+        <OrgMark name={organizer.name} logoUrl={organizer.logoUrl} />
+        <span className="truncate">{[organizer.name, event.venue].filter(Boolean).join(" · ")}</span>
+      </p>
+      {event.status === "published" && (
+        <div className="flex flex-wrap gap-2 pt-1">
+          <Badge variant="outline">{fmt(t.going, { taken: counts?.taken ?? 0, capacity: event.capacity })}</Badge>
+          {review > 0 && <Badge>{fmt(t.receiptsToReview, { n: review })}</Badge>}
+        </div>
       )}
-    </Card>
+      <div className="flex flex-wrap gap-2 pt-2">
+        <Button variant="outline" size="sm" asChild>
+          <Link href={manage}>{event.status === "draft" ? t.finishDraft : t.manage}</Link>
+        </Button>
+        {review > 0 && (
+          <Button variant="ghost" size="sm" asChild>
+            <Link href={`${manage}/guests?tab=review`}>{t.reviewReceipts}</Link>
+          </Button>
+        )}
+      </div>
+    </>
   )
 }
 
-async function Dashboard({ lang, dict }: { lang: Locale; dict: Dictionary }) {
-  const user = await requireUser(lang)
-  const organizer = await getOrganizerForUser(db(), user.id)
+function GuestCard({ lang, dict, event, organizer, registration }: Extract<Item, { kind: "guest" }> & { lang: Locale; dict: Dictionary }) {
+  const t = dict.app
+  const page = `/${lang}/r/${registration.id}`
+  return (
+    <>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-sm text-muted-foreground tabular-nums">{formatDayParts(event.startsAt, lang).time}</span>
+        <RegistrationStatusBadge status={registration.status} dict={dict.registrationStatus} />
+        {event.status === "cancelled" && <Badge variant="destructive">{dict.event.status.cancelled}</Badge>}
+      </div>
+      <Link href={`/${lang}/o/${organizer.slug}/${event.slug}`} className="text-lg font-semibold hover:underline">
+        {event.title}
+      </Link>
+      <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+        <OrgMark name={organizer.name} logoUrl={organizer.logoUrl} />
+        <span className="truncate">{[organizer.name, event.venue].filter(Boolean).join(" · ")}</span>
+      </p>
+      {registration.status === "held" && registration.holdExpiresAt && (
+        <p className="pt-1">
+          {fmt(t.payBy, { amount: formatMoney(event.priceUzs, lang), time: formatDayParts(registration.holdExpiresAt, lang).time })}
+        </p>
+      )}
+      <div className="flex flex-wrap gap-2 pt-2">
+        {registration.status === "confirmed" ? (
+          <Button variant="outline" size="sm" asChild>
+            <Link href={page}>
+              <QrCode />
+              {t.myTicket}
+            </Link>
+          </Button>
+        ) : registration.status === "held" ? (
+          <Button size="sm" asChild>
+            <Link href={page}>{t.pay}</Link>
+          </Button>
+        ) : (
+          <Button variant="outline" size="sm" asChild>
+            <Link href={page}>{t.open}</Link>
+          </Button>
+        )}
+      </div>
+    </>
+  )
+}
 
-  const mine = await listUserRegistrations(db(), user.id)
-  const now = new Date()
-
-  if (!organizer) {
-    return (
-      <DashboardShell
-        lang={lang}
-        dict={dict}
-        title={dict.dashboard.title}
-        description={fmt(dict.dashboard.welcome, { name: user.name || user.email || "" })}
-      >
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
-          <MyTickets lang={lang} dict={dict} mine={mine} now={now} />
-          <Card>
-            <CardHeader>
-              <CardTitle>{dict.dashboard.organizeTitle}</CardTitle>
-              <CardDescription>{dict.dashboard.organizeBody}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button variant="outline" asChild>
-                <Link href={`/${lang}/dashboard/organizer/new`}>
-                  <Plus />
-                  {dict.dashboard.organizeCta}
-                </Link>
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-      </DashboardShell>
-    )
+function Cover({ event }: { event: Event }) {
+  if (!event.coverUrl) {
+    return <div aria-hidden className="hidden size-28 shrink-0 rounded-lg border border-dashed sm:block" />
   }
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={event.coverUrl} alt="" className="hidden size-28 shrink-0 rounded-lg object-cover sm:block" />
+}
 
-  const [events, used, checked] = await Promise.all([
-    listEvents(db(), organizer.id),
-    eventsThisMonth(db(), organizer.id),
-    organizer.autoCheck ? autoCheckUsage(db(), organizer.id, startOfMonth()) : Promise.resolve(0),
+/** Events grouped by day: the date on the left (on top on phones), the cards on the right. */
+function Timeline({ lang, dict, items }: { lang: Locale; dict: Dictionary; items: Item[] }) {
+  const days = new Map<string, Item[]>()
+  for (const item of items) {
+    const key = localDay(item.event.startsAt)
+    days.set(key, [...(days.get(key) ?? []), item])
+  }
+  return (
+    <div className="flex flex-col gap-6">
+      {[...days.values()].map((group) => {
+        const parts = formatDayParts(group[0].event.startsAt, lang)
+        return (
+          <section key={localDay(group[0].event.startsAt)} className="grid gap-3 md:grid-cols-[8rem_minmax(0,1fr)] md:gap-6">
+            <h2 className="md:pt-5">
+              <span className="font-semibold md:hidden">{parts.short}</span>
+              <span className="hidden font-semibold md:block">{parts.day}</span>
+              <span className="hidden text-sm text-muted-foreground capitalize md:block">{parts.weekday}</span>
+            </h2>
+            <div className="flex flex-col gap-3">
+              {group.map((item) => (
+                <Card key={`${item.kind}-${item.event.id}`} className="flex-row items-start gap-4 px-5 py-5">
+                  <div className="flex min-w-0 flex-1 flex-col gap-1">
+                    {item.kind === "host" ? <HostCard lang={lang} dict={dict} {...item} /> : <GuestCard lang={lang} dict={dict} {...item} />}
+                  </div>
+                  <Cover event={item.event} />
+                </Card>
+              ))}
+            </div>
+          </section>
+        )
+      })}
+    </div>
+  )
+}
+
+async function Content({ lang, dict, searchParams }: { lang: Locale; dict: Dictionary; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const tab = (await searchParams).tab === "past" ? "past" : "upcoming"
+  const user = await requireUser(lang)
+  const memberships = await listOrganizersForUser(db(), user.id)
+  const [hosted, mine] = await Promise.all([
+    listEventsForOrganizers(
+      db(),
+      memberships.map((m) => m.organizer.id),
+    ),
+    listUserRegistrations(db(), user.id),
   ])
-  // Upcoming soonest first; past (started) newest first.
-  const upcoming = events.filter((e) => e.startsAt > now).reverse()
-  const past = events.filter((e) => e.startsAt <= now)
   const counts = await registrationCounts(
     db(),
-    events.map((e) => e.id),
+    hosted.map((h) => h.event.id),
   )
-  const progress = (e: (typeof events)[number]) => {
-    const c = counts.get(e.id)
-    return (
-      <span className="flex flex-wrap items-center gap-2">
-        <span className="tabular-nums">{fmt(t.taken, { taken: c?.taken ?? 0, capacity: e.capacity })}</span>
-        {!!c?.review && <Badge>{fmt(dict.registrations.toReview, { n: c.review })}</Badge>}
-      </span>
-    )
-  }
-  const limits = planLimits(organizer)
-  const t = dict.dashboard
-  const usage = fmt(t.usage, { used, limit: limits.eventsPerMonth, plan: dict.plans[limits.plan] })
-  const addOn = organizer.autoCheck ? ` · ${fmt(t.autoCheckUsage, { n: checked, price: formatMoney(AUTO_CHECK_PRICE_UZS, lang) })}` : ""
 
+  const cutoff = new Date().getTime() - ONGOING_MS
+  const isUpcoming = (event: Event) => event.startsAt.getTime() >= cutoff
+  const items: Item[] = [
+    ...hosted.map(({ event, organizer }) => ({ kind: "host" as const, event, organizer, counts: counts.get(event.id) })),
+    ...mine
+      .filter(({ registration }) => GUEST_VISIBLE.includes(registration.status))
+      .map(({ event, organizer, registration }) => ({ kind: "guest" as const, event, organizer, registration })),
+  ]
+    .filter((item) => isUpcoming(item.event) === (tab === "upcoming"))
+    // Upcoming: soonest first. Past: most recent first.
+    .sort((a, b) => (tab === "upcoming" ? 1 : -1) * (a.event.startsAt.getTime() - b.event.startsAt.getTime()))
+
+  const t = dict.app
   return (
     <DashboardShell
       lang={lang}
       dict={dict}
-      title={organizer.name}
-      description={usage + addOn}
+      active="events"
+      title={t.events}
       actions={
-        <>
-          <Button variant="outline" size="sm" asChild>
-            <Link href={`/${lang}/o/${organizer.slug}`}>
-              <ExternalLink />
-              {t.publicPage}
-            </Link>
-          </Button>
-          <Button variant="outline" size="sm" asChild>
-            <Link href={`/${lang}/dashboard/organizer`}>{t.editOrganizer}</Link>
-          </Button>
-          <Button size="sm" asChild>
-            <Link href={`/${lang}/dashboard/events/new`}>
-              <Plus />
-              {t.newEvent}
-            </Link>
-          </Button>
-        </>
+        <Tabs value={tab}>
+          <TabsList>
+            <TabsTrigger value="upcoming" asChild>
+              <Link href={`/${lang}/dashboard`} replace scroll={false}>
+                {dict.dashboard.upcoming}
+              </Link>
+            </TabsTrigger>
+            <TabsTrigger value="past" asChild>
+              <Link href={`/${lang}/dashboard?tab=past`} replace scroll={false}>
+                {dict.dashboard.past}
+              </Link>
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
       }
     >
-      <Card className="gap-4">
-        <CardHeader>
-          <CardTitle>{t.events}</CardTitle>
-          {events.length === 0 && <CardDescription>{t.noEvents}</CardDescription>}
-        </CardHeader>
-        {[
-          { key: "upcoming", label: t.upcoming, list: upcoming },
-          { key: "past", label: t.past, list: past },
-        ].map(({ key, label, list }) =>
-          list.length === 0 ? null : (
-            <div key={key} className="flex flex-col gap-2">
-              <p className="px-6 text-sm font-medium text-muted-foreground">{label}</p>
-              {list.length > 0 && (
-                <CardContent className="flex flex-col gap-3 md:hidden">
-                  {list.map((e) => (
-                    <div key={e.id} className="flex flex-col gap-3 rounded-lg border p-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex min-w-0 flex-col gap-0.5">
-                          <Link href={`/${lang}/dashboard/events/${e.id}`} className="font-medium hover:underline">
-                            {e.title}
-                          </Link>
-                          <p className="text-sm text-muted-foreground">{formatDateTime(e.startsAt, lang)}</p>
-                          <p className="text-sm text-muted-foreground">
-                            {e.priceUzs ? `${formatMoney(e.priceUzs, lang)} ${dict.public.uzs}` : dict.event.free}
-                          </p>
-                          <div className="text-sm text-muted-foreground">{progress(e)}</div>
-                        </div>
-                        <EventStatusBadge status={displayStatus(e, now)} dict={dict.event.status} />
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        <Button variant="outline" size="sm" asChild>
-                          <Link href={`/${lang}/dashboard/events/${e.id}/registrations`}>{dict.registrations.title}</Link>
-                        </Button>
-                        <Button variant="ghost" size="sm" asChild>
-                          <Link href={`/${lang}/dashboard/events/${e.id}`}>{dict.event.editTitle}</Link>
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </CardContent>
-              )}
-              {list.length > 0 && (
-                <CardContent className="hidden px-3 md:block">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>{dict.event.title}</TableHead>
-                        <TableHead>{dict.event.startsAt}</TableHead>
-                        <TableHead className="text-right">{dict.event.capacity}</TableHead>
-                        <TableHead className="text-right">{dict.event.price}</TableHead>
-                        <TableHead>{dict.common.status}</TableHead>
-                        <TableHead className="text-right">{dict.registrations.title}</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {list.map((e) => (
-                        <TableRow key={e.id}>
-                          <TableCell className="font-medium">
-                            <Link href={`/${lang}/dashboard/events/${e.id}`} className="hover:underline">
-                              {e.title}
-                            </Link>
-                          </TableCell>
-                          <TableCell className="whitespace-nowrap">{formatDateTime(e.startsAt, lang)}</TableCell>
-                          <TableCell className="text-right text-sm">{progress(e)}</TableCell>
-                          <TableCell className="text-right tabular-nums">
-                            {e.priceUzs ? formatMoney(e.priceUzs, lang) : <Badge variant="outline">{dict.event.free}</Badge>}
-                          </TableCell>
-                          <TableCell>
-                            <EventStatusBadge status={displayStatus(e, now)} dict={dict.event.status} />
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Button variant="ghost" size="sm" asChild>
-                              <Link href={`/${lang}/dashboard/events/${e.id}/registrations`}>{dict.dashboard.open}</Link>
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              )}
-            </div>
-          ),
-        )}
-      </Card>
-      {mine.length > 0 && <MyTickets lang={lang} dict={dict} mine={mine} now={now} />}
+      {items.length > 0 ? (
+        <Timeline lang={lang} dict={dict} items={items} />
+      ) : (
+        <p className="text-sm text-muted-foreground">{tab === "upcoming" ? t.noUpcoming : t.noPast}</p>
+      )}
+      {memberships.length === 0 && <OrganizeCard lang={lang} dict={dict} />}
     </DashboardShell>
   )
 }
 
-export default async function DashboardPage({ params }: PageProps<"/[lang]/dashboard">) {
+export default async function EventsPage({ params, searchParams }: PageProps<"/[lang]/dashboard">) {
   const { lang } = await params
   if (!isLocale(lang)) notFound()
   const dict = await getDictionary(lang)
-
   return (
     <Suspense fallback={<PageSkeleton />}>
-      <Dashboard lang={lang} dict={dict} />
+      <Content lang={lang} dict={dict} searchParams={searchParams} />
     </Suspense>
   )
 }

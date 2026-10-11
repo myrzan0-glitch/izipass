@@ -1,5 +1,6 @@
 import { z } from "zod"
 
+import { LOCALES } from "@/lib/i18n/config"
 import { RESERVED_SLUGS, SLUG_PATTERN } from "@/lib/slug"
 
 /** Error messages are dictionary keys under `errors`, resolved in the UI. */
@@ -65,6 +66,20 @@ export const eventSchema = z
   .refine((e) => !e.endsAt || e.endsAt > e.startsAt, { message: "endsBeforeStart", path: ["endsAt"] })
   .refine((e) => e.priceUzs === 0 || e.paymentInstructions.length > 0, { message: "paymentRequired", path: ["paymentInstructions"] })
 export type EventInput = z.infer<typeof eventSchema>
+
+/** "+998 90 123-45-67" → "+998901234567". */
+export const phoneSchema = z
+  .string()
+  .trim()
+  .transform((p) => p.replace(/[\s()-]/g, ""))
+  .pipe(z.string().regex(/^\+?\d{9,15}$/, "phone"))
+
+/** Settings → Your profile. The phone is optional there. */
+export const profileSchema = z.object({
+  name: z.string().trim().min(2, "required").max(80, "tooLong"),
+  phone: z.union([z.literal(""), phoneSchema]),
+  locale: z.enum(LOCALES, "invalid"),
+})
 
 /** Flattens zod issues to one message key per field. */
 export function fieldErrors(error: z.ZodError): Record<string, string> {

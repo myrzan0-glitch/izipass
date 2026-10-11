@@ -5,65 +5,69 @@ import { notFound } from "next/navigation"
 import { saveEventAction } from "@/app/[lang]/dashboard/actions"
 import { DashboardShell } from "@/components/dashboard-shell"
 import { EventForm } from "@/components/event-form"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Card, CardContent } from "@/components/ui/card"
 import { PageSkeleton } from "@/components/page-skeleton"
-import { requireOrganizer } from "@/lib/auth/current"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { requireUser } from "@/lib/auth/current"
 import { db } from "@/lib/db"
+import { PLAN_LIMITS } from "@/lib/db/schema"
 import { eventsThisMonth, planLimits } from "@/lib/events"
 import { isLocale, type Locale } from "@/lib/i18n/config"
 import { getDictionary } from "@/lib/i18n/dictionaries"
 import type { Dictionary } from "@/lib/i18n/dictionaries/en"
 import { fmt } from "@/lib/i18n/format"
+import { listOrganizersForUser } from "@/lib/organizers"
 
 export async function generateMetadata({ params }: PageProps<"/[lang]/dashboard/events/new">): Promise<Metadata> {
   const { lang } = await params
   if (!isLocale(lang)) return {}
-  return { title: (await getDictionary(lang)).event.createTitle, robots: { index: false } }
+  return { title: (await getDictionary(lang)).create.title, robots: { index: false } }
 }
 
-async function Content({ lang, dict }: { lang: Locale; dict: Dictionary }) {
-  const { organizer } = await requireOrganizer(lang, `/${lang}/dashboard/events/new`)
-  const limits = planLimits(organizer)
-  const used = await eventsThisMonth(db(), organizer.id)
-  const atLimit = used >= limits.eventsPerMonth
+async function Content({ lang, dict, searchParams }: { lang: Locale; dict: Dictionary; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const query = await searchParams
+  const user = await requireUser(lang, `/${lang}/dashboard/events/new`)
+  const memberships = await listOrganizersForUser(db(), user.id)
+  const organizers = memberships.map(({ organizer }) => ({
+    id: organizer.id,
+    name: organizer.name,
+    slug: organizer.slug,
+    logoUrl: organizer.logoUrl,
+    maxCapacity: planLimits(organizer).participantsPerEvent,
+  }))
+  const chosen = memberships.find((m) => m.organizer.id === query.org)?.organizer ?? memberships[0]?.organizer
+  // Drafts are always allowed; publishing counts against the plan, so warn early.
+  const limits = chosen ? planLimits(chosen) : null
+  const used = chosen ? await eventsThisMonth(db(), chosen.id) : 0
 
   return (
-    <DashboardShell
-      lang={lang}
-      dict={dict}
-      title={dict.event.createTitle}
-      back={{ href: `/${lang}/dashboard`, label: dict.nav.dashboard }}
-    >
-      {atLimit && (
+    <DashboardShell lang={lang} dict={dict} active="events" width="wide">
+      {limits && used >= limits.eventsPerMonth && (
         <Alert>
           <AlertTitle>{dict.errors.eventsPerMonth}</AlertTitle>
           <AlertDescription>{fmt(dict.dashboard.usage, { used, limit: limits.eventsPerMonth, plan: dict.plans[limits.plan] })}</AlertDescription>
         </Alert>
       )}
-      <Card className="max-w-2xl">
-        <CardContent>
-          <EventForm
-            lang={lang}
-            event={null}
-            organizerSlug={organizer.slug}
-            maxCapacity={limits.participantsPerEvent}
-            action={saveEventAction}
-            dict={dict}
-          />
-        </CardContent>
-      </Card>
+      <EventForm
+        lang={lang}
+        event={null}
+        section="all"
+        organizers={organizers}
+        defaultOrganizerId={chosen?.id}
+        newOrgMaxCapacity={PLAN_LIMITS.free.participantsPerEvent}
+        action={saveEventAction}
+        dict={dict}
+      />
     </DashboardShell>
   )
 }
 
-export default async function NewEventPage({ params }: PageProps<"/[lang]/dashboard/events/new">) {
+export default async function NewEventPage({ params, searchParams }: PageProps<"/[lang]/dashboard/events/new">) {
   const { lang } = await params
   if (!isLocale(lang)) notFound()
   const dict = await getDictionary(lang)
   return (
     <Suspense fallback={<PageSkeleton />}>
-      <Content lang={lang} dict={dict} />
+      <Content lang={lang} dict={dict} searchParams={searchParams} />
     </Suspense>
   )
 }

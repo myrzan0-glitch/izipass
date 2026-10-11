@@ -1,10 +1,9 @@
 import { getSession } from "@/lib/auth/session"
 import { toCsv } from "@/lib/csv"
 import { db } from "@/lib/db"
-import { getEvent } from "@/lib/events"
 import { dictionaryFor } from "@/lib/i18n/all"
 import { DEFAULT_LOCALE, isLocale } from "@/lib/i18n/config"
-import { getOrganizerForUser } from "@/lib/organizers"
+import { getEventForMember } from "@/lib/organizers"
 import { listEventRegistrations } from "@/lib/registrations"
 import { slugify } from "@/lib/slug"
 import { toLocalInput } from "@/lib/time"
@@ -15,9 +14,8 @@ const when = (date: Date | null) => (date ? toLocalInput(date).replace("T", " ")
 export async function GET(request: Request, { params }: RouteContext<"/api/events/[id]/export">) {
   const session = await getSession()
   if (!session) return new Response(null, { status: 401 })
-  const organizer = await getOrganizerForUser(db(), session.userId)
   const { id } = await params
-  const event = organizer ? await getEvent(db(), organizer.id, id) : null
+  const event = (await getEventForMember(db(), session.userId, id))?.event
   if (!event) return new Response(null, { status: 404 })
 
   const langParam = new URL(request.url).searchParams.get("lang") ?? ""

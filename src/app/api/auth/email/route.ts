@@ -1,5 +1,6 @@
 import { z } from "zod"
 
+import { getSession } from "@/lib/auth/session"
 import { safeNext } from "@/lib/auth/tokens"
 import { issueLoginToken } from "@/lib/auth/users"
 import { db } from "@/lib/db"
@@ -7,7 +8,13 @@ import { sendEmail } from "@/lib/email"
 import { DEFAULT_LOCALE, isLocale, type Locale } from "@/lib/i18n/config"
 import { SITE_NAME, SITE_URL } from "@/lib/site"
 
-const bodySchema = z.object({ email: z.email(), lang: z.string().optional(), next: z.string().optional() })
+const bodySchema = z.object({
+  email: z.email(),
+  lang: z.string().optional(),
+  next: z.string().optional(),
+  /** Settings → "Add email": the link adds the address to the signed-in account. */
+  link: z.boolean().optional(),
+})
 
 const SUBJECT: Record<Locale, string> = {
   uz: "izipass’ga kirish havolasi",
@@ -29,7 +36,8 @@ export async function POST(request: Request) {
 
   const lang = parsed.data.lang && isLocale(parsed.data.lang) ? parsed.data.lang : DEFAULT_LOCALE
   const next = safeNext(parsed.data.next, `/${lang}/dashboard`)
-  const { email, token } = await issueLoginToken(db(), parsed.data.email, next)
+  const session = parsed.data.link ? await getSession() : null
+  const { email, token } = await issueLoginToken(db(), parsed.data.email, next, session?.userId ?? null)
 
   const url = new URL("/api/auth/email/verify", SITE_URL)
   url.searchParams.set("token", token)

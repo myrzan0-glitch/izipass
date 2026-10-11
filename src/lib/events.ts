@@ -156,6 +156,17 @@ export async function listEvents(db: Db, organizerId: string) {
   return db.select().from(events).where(eq(events.organizerId, organizerId)).orderBy(desc(events.startsAt))
 }
 
+/** Every event of these organizations, with its organization, newest first. */
+export async function listEventsForOrganizers(db: Db, organizerIds: string[]) {
+  if (organizerIds.length === 0) return []
+  return db
+    .select({ event: events, organizer: organizers })
+    .from(events)
+    .innerJoin(organizers, eq(organizers.id, events.organizerId))
+    .where(inArray(events.organizerId, organizerIds))
+    .orderBy(desc(events.startsAt))
+}
+
 export async function getEvent(db: Db, organizerId: string, eventId: string) {
   if (!isUuid(eventId)) return null
   const [event] = await db

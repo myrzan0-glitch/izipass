@@ -32,6 +32,7 @@ export function OrganizerForm({ lang, organizer, action, dict }: Props) {
   return (
     <form action={formAction} noValidate>
       <input type="hidden" name="lang" value={lang} />
+      {organizer && <input type="hidden" name="organizerId" value={organizer.id} />}
       <FieldGroup>
         <Field data-invalid={!!err("name")}>
           <FieldLabel htmlFor="name">{t.name}</FieldLabel>

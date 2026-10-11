@@ -7,13 +7,14 @@ import { ImagePlus, Trash2 } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field"
+import { prepareImage } from "@/lib/client/image"
 import type { Dictionary } from "@/lib/i18n/dictionaries/en"
 
 type Props = {
   /** POST uploads, DELETE removes. */
   endpoint: string
   url: string | null
-  shape: "square" | "wide"
+  shape: "square" | "cover"
   label: string
   hint: string
   /** Initials shown in an empty square (logo). */
@@ -21,30 +22,7 @@ type Props = {
   dict: Dictionary
 }
 
-/**
- * Picks an image, shrinks it in the browser (a square 512px logo or a
- * 1600px-wide cover), uploads it, and refreshes the page.
- */
-async function prepare(file: File, shape: Props["shape"]): Promise<Blob> {
-  const bitmap = await createImageBitmap(file)
-  const canvas = document.createElement("canvas")
-  const ctx = canvas.getContext("2d")
-  if (!ctx) return file
-  if (shape === "square") {
-    const side = Math.min(bitmap.width, bitmap.height)
-    canvas.width = canvas.height = Math.min(512, side)
-    ctx.drawImage(bitmap, (bitmap.width - side) / 2, (bitmap.height - side) / 2, side, side, 0, 0, canvas.width, canvas.height)
-  } else {
-    const scale = Math.min(1, 1600 / bitmap.width)
-    canvas.width = Math.round(bitmap.width * scale)
-    canvas.height = Math.round(bitmap.height * scale)
-    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
-  }
-  // Formats every link preview shows (Telegram, Open Graph): PNG keeps logo transparency, JPEG keeps covers small.
-  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, shape === "square" ? "image/png" : "image/jpeg", 0.85))
-  return blob ?? file
-}
-
+/** Picks an image, shrinks it in the browser, uploads it, and refreshes the page. */
 export function ImageField({ endpoint, url, shape, label, hint, fallback, dict }: Props) {
   const router = useRouter()
   const input = useRef<HTMLInputElement>(null)
@@ -59,7 +37,7 @@ export function ImageField({ endpoint, url, shape, label, hint, fallback, dict }
       let body: FormData | undefined
       if (file) {
         body = new FormData()
-        const blob = await prepare(file, shape).catch(() => file)
+        const blob = await prepareImage(file, shape === "square" ? "logo" : "cover").catch(() => file)
         body.append("file", blob, "image")
       }
       const res = await fetch(endpoint, { method, body })
@@ -88,12 +66,12 @@ export function ImageField({ endpoint, url, shape, label, hint, fallback, dict }
           </Avatar>
         ) : url ? (
           // eslint-disable-next-line @next/next/no-img-element -- our own resized image
-          <img src={url} alt="" className="aspect-video w-full rounded-lg border object-cover" />
+          <img src={url} alt="" className="aspect-square w-full rounded-xl border object-cover" />
         ) : (
           <button
             type="button"
             onClick={() => input.current?.click()}
-            className="flex aspect-video w-full items-center justify-center rounded-lg border border-dashed text-muted-foreground hover:bg-accent/40"
+            className="flex aspect-square w-full items-center justify-center rounded-xl border border-dashed bg-muted/50 text-muted-foreground hover:bg-accent/40"
           >
             <ImagePlus className="size-6" aria-hidden />
             <span className="sr-only">{t.upload}</span>

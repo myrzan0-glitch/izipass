@@ -34,6 +34,7 @@ export function PaymentSettingsForm({ lang, organizer, action, dict }: Props) {
   return (
     <form action={formAction} noValidate>
       <input type="hidden" name="lang" value={lang} />
+      <input type="hidden" name="organizerId" value={organizer.id} />
       <FieldSet>
         <FieldLegend>{t.autoCheckTitle}</FieldLegend>
         <FieldDescription>{fmt(t.autoCheckBody, { price: formatMoney(AUTO_CHECK_PRICE_UZS, lang) })}</FieldDescription>

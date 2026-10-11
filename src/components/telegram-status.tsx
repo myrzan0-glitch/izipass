@@ -14,7 +14,7 @@ import { telegramApiFromEnv } from "@/lib/telegram/api"
 import { webhookStatus, type WebhookStatus } from "@/lib/telegram/webhook"
 
 /** Organizer page: is the bot connected, and if not, why. */
-export async function TelegramStatus({ lang, user, dict }: { lang: Locale; user: User; dict: Dictionary }) {
+export async function TelegramStatus({ lang, user, organizerId, dict }: { lang: Locale; user: User; organizerId: string; dict: Dictionary }) {
   const t = dict.telegram
   const api = telegramApiFromEnv()
   let status: WebhookStatus | null = null
@@ -68,6 +68,7 @@ export async function TelegramStatus({ lang, user, dict }: { lang: Locale; user:
         <CardFooter className="flex flex-wrap gap-2">
           <form action={reconnectTelegramAction}>
             <input type="hidden" name="lang" value={lang} />
+            <input type="hidden" name="organizerId" value={organizerId} />
             <Button type="submit" variant={ok ? "outline" : "default"} size="sm">
               {t.reconnect}
             </Button>

@@ -11,6 +11,8 @@ export const users = pgTable(
   {
     id: id(),
     name: text("name").notNull().default(""),
+    /** Pre-fills registrations; organizers see it next to the name. */
+    phone: text("phone").notNull().default(""),
     email: text("email"),
     telegramId: text("telegram_id"),
     telegramUsername: text("telegram_username"),
@@ -33,6 +35,8 @@ export const loginTokens = pgTable(
     tokenHash: text("token_hash").notNull(),
     /** Where to send the user after signing in (same-site path only). */
     next: text("next"),
+    /** Set when a signed-in person adds this email to their account (instead of signing in with it). */
+    userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     usedAt: timestamp("used_at", { withTimezone: true }),
     createdAt: createdAt(),

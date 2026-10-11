@@ -32,19 +32,20 @@ type Props = {
   cancel: string
   /** Optional free-text field (e.g. a rejection reason) sent with the form. */
   reason?: { name: string; label: string; placeholder: string }
+  disabled?: boolean
 }
 
 /**
  * A button that asks before doing something hard to undo. The form lives in
  * the dialog; it closes on submit while the server action runs.
  */
-export function ConfirmAction({ action, fields, trigger, triggerVariant = "outline", triggerSize = "sm", title, description, confirm, cancel, reason }: Props) {
+export function ConfirmAction({ action, fields, trigger, triggerVariant = "outline", triggerSize = "sm", title, description, confirm, cancel, reason, disabled }: Props) {
   const [open, setOpen] = useState(false)
   const reasonId = useId()
   return (
     <AlertDialog open={open} onOpenChange={setOpen}>
       <AlertDialogTrigger asChild>
-        <Button type="button" variant={triggerVariant} size={triggerSize}>
+        <Button type="button" variant={triggerVariant} size={triggerSize} disabled={disabled}>
           {trigger}
         </Button>
       </AlertDialogTrigger>

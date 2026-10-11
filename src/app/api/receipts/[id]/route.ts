@@ -1,7 +1,6 @@
 import { getSession } from "@/lib/auth/session"
 import { db } from "@/lib/db"
-import { getEvent } from "@/lib/events"
-import { getOrganizerForUser } from "@/lib/organizers"
+import { getEventForMember } from "@/lib/organizers"
 import { getReceipt } from "@/lib/registrations"
 
 /** Receipt image: visible to the attendee who uploaded it and to the event's organizer. */
@@ -13,10 +12,7 @@ export async function GET(_request: Request, { params }: RouteContext<"/api/rece
   if (!row) return new Response(null, { status: 404 })
 
   let allowed = row.registration.userId === session.userId
-  if (!allowed) {
-    const organizer = await getOrganizerForUser(db(), session.userId)
-    allowed = !!organizer && !!(await getEvent(db(), organizer.id, row.registration.eventId))
-  }
+  if (!allowed) allowed = !!(await getEventForMember(db(), session.userId, row.registration.eventId))
   if (!allowed) return new Response(null, { status: 404 })
 
   return new Response(new Uint8Array(row.receipt.data), {
