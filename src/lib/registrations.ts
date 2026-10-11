@@ -1,9 +1,10 @@
-import { randomInt } from "node:crypto"
-import { and, asc, count, desc, eq, inArray, isNotNull, isNull, lt } from "drizzle-orm"
+import { createHash, randomInt } from "node:crypto"
+import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, lt, ne, or } from "drizzle-orm"
 
 import type { Db } from "@/lib/db"
 import { isUuid } from "@/lib/ids"
-import { events, organizers, receipts, registrations, type Event, type Registration, type RegistrationStatus } from "@/lib/db/schema"
+import { events, organizers, receipts, registrations, type Event, type Receipt, type Registration, type RegistrationStatus } from "@/lib/db/schema"
+import { checkReceipt, parseReceipt } from "@/lib/receipt-check"
 
 /** Statuses that take a spot. */
 export const ACTIVE: RegistrationStatus[] = ["held", "proof_sent", "confirmed"]
@@ -149,12 +150,25 @@ export async function listUserRegistrations(db: Db, userId: string) {
     .orderBy(desc(events.startsAt))
 }
 
+/** The latest receipt of each registration, without the image bytes. */
+export type ReceiptSummary = Pick<Receipt, "id" | "provider" | "amountUzs" | "paidAt" | "receiptNo" | "verdict" | "checks" | "checkedAt">
+
 export async function listEventRegistrations(db: Db, eventId: string) {
   const rows = await db.select().from(registrations).where(eq(registrations.eventId, eventId)).orderBy(asc(registrations.createdAt))
-  const latest = new Map<string, string>()
+  const latest = new Map<string, ReceiptSummary>()
   if (rows.length > 0) {
     const found = await db
-      .select({ id: receipts.id, registrationId: receipts.registrationId })
+      .select({
+        id: receipts.id,
+        registrationId: receipts.registrationId,
+        provider: receipts.provider,
+        amountUzs: receipts.amountUzs,
+        paidAt: receipts.paidAt,
+        receiptNo: receipts.receiptNo,
+        verdict: receipts.verdict,
+        checks: receipts.checks,
+        checkedAt: receipts.checkedAt,
+      })
       .from(receipts)
       .where(
         inArray(
@@ -163,9 +177,12 @@ export async function listEventRegistrations(db: Db, eventId: string) {
         ),
       )
       .orderBy(desc(receipts.createdAt))
-    for (const r of found) if (!latest.has(r.registrationId)) latest.set(r.registrationId, r.id)
+    for (const { registrationId, ...receipt } of found) if (!latest.has(registrationId)) latest.set(registrationId, receipt)
   }
-  return rows.map((registration) => ({ registration, receiptId: latest.get(registration.id) ?? null }))
+  return rows.map((registration) => {
+    const receipt = latest.get(registration.id) ?? null
+    return { registration, receipt, receiptId: receipt?.id ?? null }
+  })
 }
 
 export function countByStatus(rows: { registration: Registration }[]) {
@@ -183,13 +200,91 @@ export async function attachReceipt(db: Db, registrationId: string, contentType:
   if (!reg) throw new RegistrationError("notFound")
   if (reg.status !== "held" && reg.status !== "proof_sent") throw new RegistrationError("badState")
   if (reg.status === "held" && reg.holdExpiresAt && reg.holdExpiresAt < now) throw new RegistrationError("badState")
-  await db.insert(receipts).values({ registrationId, contentType, data })
+  const sha256 = createHash("sha256").update(data).digest("hex")
+  const [receipt] = await db.insert(receipts).values({ registrationId, contentType, data, sha256 }).returning({ id: receipts.id })
   const [updated] = await db
     .update(registrations)
     .set({ status: "proof_sent", holdExpiresAt: null, rejectReason: null, updatedAt: now })
     .where(eq(registrations.id, registrationId))
     .returning()
-  return updated
+  return { registration: updated, receiptId: receipt.id }
+}
+
+/**
+ * Auto-check: the attendee's browser read the receipt with OCR and sent the
+ * text. Parse it, compare with the event and organizer, remember the result,
+ * and confirm the spot when the organizer lets passing receipts through.
+ * Returns null when the organizer has not enabled the add-on.
+ */
+export async function recordReceiptText(db: Db, receiptId: string, text: string, now = new Date()) {
+  const row = await getReceipt(db, receiptId)
+  if (!row) throw new RegistrationError("notFound")
+  const { receipt, registration } = row
+  const [ctx] = await db
+    .select({ event: events, organizer: organizers })
+    .from(events)
+    .innerJoin(organizers, eq(organizers.id, events.organizerId))
+    .where(eq(events.id, registration.eventId))
+    .limit(1)
+  if (!ctx) throw new RegistrationError("notFound")
+  const { event, organizer } = ctx
+  if (!organizer.autoCheck) return null
+
+  const parsed = parseReceipt(text, now)
+  const duplicate = await isDuplicateReceipt(db, organizer.id, receipt, parsed.receiptNo)
+  const { verdict, checks } = checkReceipt(parsed, text, {
+    priceUzs: event.priceUzs,
+    registeredAt: registration.updatedAt,
+    uploadedAt: receipt.createdAt,
+    referenceCode: registration.referenceCode,
+    payoutCardLast4: organizer.payoutCardLast4,
+    payoutName: organizer.payoutName,
+    duplicate,
+  })
+  const amountUzs = parsed.amounts.includes(event.priceUzs) ? event.priceUzs : (parsed.amounts[0] ?? null)
+  await db
+    .update(receipts)
+    .set({
+      ocrText: text.slice(0, 20_000),
+      provider: parsed.provider,
+      amountUzs,
+      paidAt: parsed.paidAt,
+      receiptNo: parsed.receiptNo,
+      verdict,
+      checks,
+      checkedAt: now,
+    })
+    .where(eq(receipts.id, receiptId))
+
+  let status = registration.status
+  if (verdict === "pass" && organizer.autoApprove && registration.status === "proof_sent") {
+    status = (await decide(db, event.id, registration.id, "confirmed", null, "", now)).status
+  }
+  return { verdict, checks, status }
+}
+
+/** Same image or same receipt number already used for another registration of this organizer. */
+async function isDuplicateReceipt(db: Db, organizerId: string, receipt: Receipt, receiptNo: string | null) {
+  const same = receiptNo ? or(eq(receipts.sha256, receipt.sha256), eq(receipts.receiptNo, receiptNo)) : eq(receipts.sha256, receipt.sha256)
+  const [row] = await db
+    .select({ id: receipts.id })
+    .from(receipts)
+    .innerJoin(registrations, eq(registrations.id, receipts.registrationId))
+    .innerJoin(events, eq(events.id, registrations.eventId))
+    .where(and(eq(events.organizerId, organizerId), ne(receipts.registrationId, receipt.registrationId), same))
+    .limit(1)
+  return !!row
+}
+
+/** Receipts checked for this organizer since `since` (the add-on is billed per checked participant). */
+export async function autoCheckUsage(db: Db, organizerId: string, since: Date) {
+  const [row] = await db
+    .select({ n: count() })
+    .from(receipts)
+    .innerJoin(registrations, eq(registrations.id, receipts.registrationId))
+    .innerJoin(events, eq(events.id, registrations.eventId))
+    .where(and(eq(events.organizerId, organizerId), isNotNull(receipts.checkedAt), gte(receipts.checkedAt, since)))
+  return row?.n ?? 0
 }
 
 export async function getReceipt(db: Db, receiptId: string) {
@@ -209,7 +304,8 @@ export async function decide(
   eventId: string,
   registrationId: string,
   decision: "confirmed" | "rejected",
-  byUserId: string,
+  /** null = auto-check. */
+  byUserId: string | null,
   reason = "",
   now = new Date(),
 ) {

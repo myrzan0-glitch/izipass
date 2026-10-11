@@ -41,7 +41,7 @@ izipass (new repo, izipass Vercel project)          wallet-app (existing)
 
 **izipass owns** all product data and logic. **wallet-app becomes the pass service**: it signs passes, hosts the Apple web service and Google callbacks, and tells izipass when a pass is added, updated or removed.
 
-Env vars in izipass: database, Blob, Upstash, Telegram bot token, email provider, the AI key, `WALLET_API_URL` and `WALLET_API_KEY`. Nothing from Apple or Google.
+Env vars in izipass: database, Telegram bot token, email provider, `WALLET_API_URL` and `WALLET_API_KEY`. No AI key: auto-check runs on free OCR. Nothing from Apple or Google.
 
 Vercel also supports **team-level shared environment variables** that can be attached to several projects. Useful for the few genuinely shared values (e.g. Upstash), but not for the Apple/Google secrets: those should exist in one project only.
 
@@ -73,53 +73,47 @@ Vercel also supports **team-level shared environment variables** that can be att
 
 ## 4. Receipt auto-check
 
-Goal: the organizer rarely has to open a screenshot.
+Goal: the organizer rarely has to open a screenshot. Decided 2026-10-11: **no paid API** (no vision model, no API key). The check is free to run and works like this.
 
-### Step 1: extract fields from the screenshot
+### Step 1: read the screenshot in the attendee's browser
 
-Click, Payme, Uzum and bank-app receipts have stable layouts but differ from each other, and text mixes Cyrillic and Latin. A vision model reads them more reliably than OCR plus regular expressions. The request sends the image and asks for a fixed JSON shape (structured output), for example:
+When the attendee uploads the receipt, the browser runs **tesseract.js** (open-source OCR, English + Russian models, about 5 MB downloaded once and cached) on the same image and sends the recognized text to `POST /api/receipts/[id]/text`. The screenshot itself is saved first, so a slow phone or a closed tab never loses the receipt; the organizer then checks by hand as before. The OCR engine, wasm core and language data are served from our own origin (`public/tesseract`, copied on `npm install`), so there is no third-party request.
 
-```json
-{
-  "provider": "click | payme | uzum | bank | unknown",
-  "amount": 100000,
-  "currency": "UZS",
-  "paidAt": "2026-10-11T18:42:00+05:00",
-  "recipient": { "cardLast4": "1234", "name": "AZIZA K." },
-  "senderCardLast4": "9876",
-  "receiptId": "A1B2C3",
-  "status": "success | pending | failed | unknown",
-  "confidence": 0.0
-}
-```
+### Step 2: fields from the text (`src/lib/receipt-check.ts`, pure, tested)
 
-Model: `claude-opus-5-5` by default (about 1,500 input tokens per screenshot, roughly $0.01 per receipt). For bulk extraction `claude-haiku-5-5` costs about 40x less; which one to use is a decision for the pilot, based on accuracy on real receipts.
+- provider: Click / Payme / Uzum / Paynet / bank / unknown
+- amounts: every money-looking number ("50 000,00 сум", "50,000.00 UZS", "50 000 so'm")
+- date and time: `11.10.2026 14:32`, `2026-10-11 14:32`, `11 октября 2026`, `11-oktabr 2026`, `11 Oct 2026` (Tashkent time)
+- card: last 4 digits of masked numbers (`8600 **** **** 1234`, `•••• 1234`)
+- receipt / transaction number, status words (успешно / muvaffaqiyatli / completed vs отклонён / bekor / failed)
+- common OCR slips are corrected (letter O inside numbers, ё/е)
 
-### Step 2: rules (no model involved)
+### Step 3: rules
 
 | Check | Pass condition |
 |---|---|
-| Amount | equals the ticket price (or ≥ for organizers who allow tips) |
-| Time | after the registration was created, before the hold expired, ± a few minutes |
-| Recipient | last 4 digits or name matches the organizer's registered payout card |
-| Status | success |
-| Receipt id | not seen before on the platform |
-| Image | perceptual hash not seen before (same screenshot re-uploaded) |
-| Confidence | above threshold |
+| Amount | one of the amounts equals the ticket price |
+| Time | paid between 2 days before registering and the upload time (a receipt without a clock time counts for its whole day) |
+| Recipient | last 4 digits or name matches the organizer's payout card (skipped when the organizer has not set either) |
+| Status | no failure words |
+| Reference | the registration code (e.g. ESC-4821) appears in the text — informational |
+| Duplicate | the same image (SHA-256) or the same receipt number was not used for another registration of this organizer |
 
-### Step 3: decision
+Verdict: **passed** when amount, time and recipient pass and nothing fails; **failed** on a wrong amount, a date outside the window, another recipient, a failure status or a duplicate; otherwise **review** (something could not be read).
 
-- All checks pass → **auto-approve** (if the organizer enabled it), otherwise "looks good" and one tap.
-- Some fail → **needs review**, with the failed checks listed.
-- Duplicate receipt or duplicate image → **reject** and flag the attendee.
+### Step 4: decision
+
+- Organizer setting *Enable auto-check* (the paid add-on, 500 so'm per checked participant; `checked_at` on receipts is the billing counter).
+- Organizer setting *Confirm automatically when every check passes*: a passing receipt confirms the spot and the ticket appears at once; otherwise the organizer still approves, with the verdict and the failed checks shown next to the receipt.
+- Nothing is ever auto-rejected: a failed check leaves the registration for the organizer.
 
 ### What this cannot do
 
-A screenshot can be edited. Auto-check catches sloppy fraud (wrong amount, reused receipt, old date) and removes the routine work, but it can't prove money arrived. Only the organizer's own Click/Payme history can. The organizer always sees the screenshot and can reverse any decision. For the pilot, we recommend "always review" for the first two events, then auto-approve.
+A screenshot can be edited, and so can the OCR text the browser sends. Auto-check catches sloppy fraud (wrong amount, reused receipt, old date) and removes the routine work, but it can't prove money arrived. Only the organizer's own Click/Payme history can. The organizer always sees the screenshot and can reverse any decision. For the pilot, we recommend auto-check without auto-confirm for the first two events, then auto-confirm.
 
-### Data science angle
+### Data
 
-Every extraction, every rule result and every organizer decision is logged. That dataset shows where the model misreads receipts, which rules cause false rejections, and whether a cheaper model is good enough. Later it can train a small classifier for the decision step, but the extraction stays with a vision model.
+Every receipt keeps the OCR text, the parsed fields, the verdict and the checks, next to the organizer's decision. That dataset shows where OCR misreads receipts and which rules cause false "review" results, so the parser can be tuned on real receipts from Click, Payme and the banks.
 
 ## 5. Tickets and check-in
 

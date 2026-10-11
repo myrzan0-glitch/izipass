@@ -8,7 +8,7 @@ import type { Db } from "@/lib/db"
 import * as schema from "@/lib/db/schema"
 import { PlanLimitError, createEvent, eventsThisMonth, getPublicEvent, listPublicEvents, setEventStatus } from "@/lib/events"
 import { SlugTakenError, createOrganizer, getOrganizerForUser } from "@/lib/organizers"
-import type { EventInput } from "@/lib/validation"
+import { organizerSchema, type EventInput } from "@/lib/validation"
 
 let db: Db
 let organizer: schema.Organizer
@@ -18,7 +18,7 @@ beforeAll(async () => {
   await migrate(pg, { migrationsFolder: "./drizzle" })
   db = pg as unknown as Db
   const user = await upsertTelegramUser(db, { id: "1", first_name: "Org", auth_date: "1", hash: "" }, "ru")
-  organizer = await createOrganizer(db, user.id, { slug: "esc", name: "English Speaking Club", description: "", links: [] })
+  organizer = await createOrganizer(db, user.id, organizerSchema.parse({ slug: "esc", name: "English Speaking Club" }))
   expect((await getOrganizerForUser(db, user.id))?.id).toBe(organizer.id)
 })
 
@@ -39,7 +39,7 @@ const base: EventInput = {
 describe("events", () => {
   it("rejects duplicate organizer slugs", async () => {
     const user = await upsertTelegramUser(db, { id: "2", first_name: "Other", auth_date: "1", hash: "" }, "ru")
-    await expect(createOrganizer(db, user.id, { slug: "esc", name: "Copy", description: "", links: [] })).rejects.toBeInstanceOf(SlugTakenError)
+    await expect(createOrganizer(db, user.id, organizerSchema.parse({ slug: "esc", name: "Copy" }))).rejects.toBeInstanceOf(SlugTakenError)
   })
 
   it("enforces the free plan limits and unique event slugs", async () => {

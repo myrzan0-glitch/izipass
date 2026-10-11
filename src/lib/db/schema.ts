@@ -1,5 +1,7 @@
 import { sql } from "drizzle-orm"
-import { boolean, customType, index, integer, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core"
+import { boolean, customType, index, integer, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core"
+
+import type { Checks, Provider, Verdict } from "@/lib/receipt-check"
 
 const id = () => uuid("id").primaryKey().defaultRandom()
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
@@ -52,8 +54,10 @@ export const organizers = pgTable(
     links: text("links").array().notNull().default(sql`'{}'::text[]`),
     plan: planEnum("plan").notNull().default("free"),
     planUntil: timestamp("plan_until", { withTimezone: true }),
-    /** Receipt auto-check is a paid add-on (per participant). */
+    /** Receipt auto-check is a paid add-on (per checked participant). */
     autoCheck: boolean("auto_check").notNull().default(false),
+    /** Confirm the spot without the organizer when every check passes. */
+    autoApprove: boolean("auto_approve").notNull().default(false),
     /** Used by auto-check to match the receipt's recipient. */
     payoutCardLast4: text("payout_card_last4"),
     payoutName: text("payout_name"),
@@ -173,8 +177,23 @@ export const receipts = pgTable(
     contentType: text("content_type").notNull(),
     data: bytea("data").notNull(),
     createdAt: createdAt(),
+    /** Hex SHA-256 of the image: the same screenshot sent twice is a duplicate. */
+    sha256: text("sha256").notNull().default(""),
+    // Auto-check (filled when the attendee's browser sends the OCR text).
+    ocrText: text("ocr_text"),
+    provider: text("provider").$type<Provider>(),
+    amountUzs: integer("amount_uzs"),
+    paidAt: timestamp("paid_at", { withTimezone: true }),
+    receiptNo: text("receipt_no"),
+    verdict: text("verdict").$type<Verdict>(),
+    checks: jsonb("checks").$type<Checks>(),
+    checkedAt: timestamp("checked_at", { withTimezone: true }),
   },
-  (t) => [index("receipts_registration_idx").on(t.registrationId)],
+  (t) => [
+    index("receipts_registration_idx").on(t.registrationId),
+    index("receipts_sha256_idx").on(t.sha256),
+    index("receipts_receipt_no_idx").on(t.receiptNo),
+  ],
 )
 
 export const PLAN_LIMITS = {
@@ -189,6 +208,7 @@ export type User = typeof users.$inferSelect
 export type Organizer = typeof organizers.$inferSelect
 export type Event = typeof events.$inferSelect
 export type Registration = typeof registrations.$inferSelect
+export type Receipt = typeof receipts.$inferSelect
 export type RegistrationStatus = Registration["status"]
 export type EventStatus = Event["status"]
 export type Plan = Organizer["plan"]

@@ -8,6 +8,7 @@ import type { Db } from "@/lib/db"
 import * as schema from "@/lib/db/schema"
 import { createEvent, setEventStatus } from "@/lib/events"
 import { createOrganizer } from "@/lib/organizers"
+import { organizerSchema } from "@/lib/validation"
 import {
   CheckInError,
   RegistrationError,
@@ -37,7 +38,7 @@ beforeAll(async () => {
   await migrate(pg, { migrationsFolder: "./drizzle" })
   db = pg as unknown as Db
   owner = await upsertTelegramUser(db, { id: "1", first_name: "Org", auth_date: "1", hash: "" }, "ru")
-  organizer = await createOrganizer(db, owner.id, { slug: "esc", name: "ESC", description: "", links: [] })
+  organizer = await createOrganizer(db, owner.id, organizerSchema.parse({ slug: "esc", name: "ESC" }))
   for (let i = 2; i < 8; i++) users.push(await upsertTelegramUser(db, { id: String(i), first_name: `U${i}`, auth_date: "1", hash: "" }, "ru"))
   event = await createEvent(db, organizer, {
     slug: "thu",
@@ -95,7 +96,7 @@ describe("registrations", () => {
   it("accepts a receipt, then the organizer decides", async () => {
     const rows = await listEventRegistrations(db, event.id)
     const held = rows.find((r) => r.registration.userId === users[2].id)!.registration
-    const sent = await attachReceipt(db, held.id, "image/jpeg", Buffer.from("jpg"))
+    const { registration: sent } = await attachReceipt(db, held.id, "image/jpeg", Buffer.from("jpg"))
     expect(sent.status).toBe("proof_sent")
     const withReceipt = (await listEventRegistrations(db, event.id)).find((r) => r.registration.id === held.id)!
     expect(withReceipt.receiptId).toBeTruthy()

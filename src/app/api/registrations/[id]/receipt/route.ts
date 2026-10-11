@@ -19,8 +19,8 @@ export async function POST(request: Request, { params }: RouteContext<"/api/regi
   if (file.size > MAX_BYTES) return Response.json({ error: "fileTooLarge" }, { status: 413 })
 
   try {
-    const updated = await attachReceipt(db(), id, file.type, Buffer.from(await file.arrayBuffer()))
-    return Response.json({ status: updated.status })
+    const { registration, receiptId } = await attachReceipt(db(), id, file.type, Buffer.from(await file.arrayBuffer()))
+    return Response.json({ status: registration.status, receiptId })
   } catch (error) {
     if (error instanceof RegistrationError) return Response.json({ error: `registration_${error.code}` }, { status: 409 })
     throw error

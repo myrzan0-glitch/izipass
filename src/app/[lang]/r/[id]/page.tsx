@@ -97,7 +97,7 @@ async function Content({ params, searchParams }: Props) {
               <Separator />
               <p className="whitespace-pre-line text-sm">{event.paymentInstructions}</p>
               <Separator />
-              <ReceiptUpload registrationId={reg.id} dict={dict} />
+              <ReceiptUpload registrationId={reg.id} ocr={organizer.autoCheck} dict={dict} />
             </CardContent>
           </Card>
         )}

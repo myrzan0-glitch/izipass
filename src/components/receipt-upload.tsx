@@ -7,6 +7,7 @@ import { Upload } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Field, FieldDescription, FieldError } from "@/components/ui/field"
 import type { Dictionary } from "@/lib/i18n/dictionaries/en"
+import { fmt } from "@/lib/i18n/format"
 
 const MAX_SIDE = 1600
 
@@ -27,34 +28,69 @@ async function shrink(file: File): Promise<Blob> {
   }
 }
 
-export function ReceiptUpload({ registrationId, dict }: { registrationId: string; dict: Dictionary }) {
+type Phase = { name: "idle" } | { name: "uploading" } | { name: "reading"; percent: number } | { name: "checking" }
+
+type Props = {
+  registrationId: string
+  /** The organizer's auto-check add-on is on: read the receipt in the browser and send the text. */
+  ocr: boolean
+  dict: Dictionary
+}
+
+export function ReceiptUpload({ registrationId, ocr, dict }: Props) {
   const router = useRouter()
   const input = useRef<HTMLInputElement>(null)
-  const [busy, setBusy] = useState(false)
+  const [phase, setPhase] = useState<Phase>({ name: "idle" })
   const [error, setError] = useState<string>()
   const t = dict.status
+  const busy = phase.name !== "idle"
 
   const upload = async (file: File | undefined) => {
     if (!file) return
     setError(undefined)
-    setBusy(true)
+    setPhase({ name: "uploading" })
     try {
+      const image = await shrink(file)
       const body = new FormData()
-      body.append("file", await shrink(file), "receipt.jpg")
+      body.append("file", image, "receipt.jpg")
       const res = await fetch(`/api/registrations/${registrationId}/receipt`, { method: "POST", body })
       if (!res.ok) {
         const data = (await res.json().catch(() => ({}))) as { error?: string }
         setError(dict.errors[(data.error ?? "generic") as keyof Dictionary["errors"]] ?? dict.errors.generic)
         return
       }
+      const { receiptId } = (await res.json()) as { receiptId?: string }
+      // The receipt is saved; auto-check is best effort and never blocks the attendee.
+      if (ocr && receiptId) {
+        setPhase({ name: "reading", percent: 0 })
+        const { readReceipt } = await import("@/lib/client/ocr")
+        const text = await readReceipt(image, (p) => setPhase({ name: "reading", percent: p.stage === "reading" ? 20 + Math.round(p.percent * 0.8) : Math.round(p.percent * 0.2) }))
+        if (text) {
+          setPhase({ name: "checking" })
+          await fetch(`/api/receipts/${receiptId}/text`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ text }),
+          }).catch(() => null)
+        }
+      }
       router.refresh()
     } catch {
       setError(dict.errors.generic)
     } finally {
-      setBusy(false)
+      setPhase({ name: "idle" })
       if (input.current) input.current.value = ""
     }
   }
+
+  const label =
+    phase.name === "uploading"
+      ? t.uploading
+      : phase.name === "reading"
+        ? fmt(t.reading, { n: phase.percent })
+        : phase.name === "checking"
+          ? t.checking
+          : t.uploadReceipt
 
   return (
     <Field data-invalid={!!error}>
@@ -66,11 +102,11 @@ export function ReceiptUpload({ registrationId, dict }: { registrationId: string
         onChange={(e) => upload(e.target.files?.[0])}
         disabled={busy}
       />
-      <Button type="button" size="lg" onClick={() => input.current?.click()} disabled={busy}>
+      <Button type="button" size="lg" onClick={() => input.current?.click()} disabled={busy} aria-live="polite">
         <Upload />
-        {busy ? t.uploading : t.uploadReceipt}
+        {label}
       </Button>
-      <FieldDescription>{t.uploadHint}</FieldDescription>
+      <FieldDescription>{ocr ? t.uploadHintOcr : t.uploadHint}</FieldDescription>
       {error && <FieldError>{error}</FieldError>}
     </Field>
   )

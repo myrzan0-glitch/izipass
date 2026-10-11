@@ -43,3 +43,6 @@ next-env.d.ts
 
 # copied from zxing-wasm on install
 /public/zxing
+
+# copied from tesseract.js on install
+/public/tesseract

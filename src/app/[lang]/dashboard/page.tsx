@@ -22,8 +22,9 @@ import { getDictionary } from "@/lib/i18n/dictionaries"
 import type { Dictionary } from "@/lib/i18n/dictionaries/en"
 import { fmt } from "@/lib/i18n/format"
 import { getOrganizerForUser } from "@/lib/organizers"
-import { listUserRegistrations } from "@/lib/registrations"
-import { formatDateTime, formatMoney } from "@/lib/time"
+import { AUTO_CHECK_PRICE_UZS } from "@/lib/db/schema"
+import { autoCheckUsage, listUserRegistrations } from "@/lib/registrations"
+import { formatDateTime, formatMoney, startOfMonth } from "@/lib/time"
 
 export async function generateMetadata({ params }: PageProps<"/[lang]/dashboard">): Promise<Metadata> {
   const { lang } = await params
@@ -73,16 +74,22 @@ async function Dashboard({ lang, dict }: { lang: Locale; dict: Dictionary }) {
     )
   }
 
-  const [events, used] = await Promise.all([listEvents(db(), organizer.id), eventsThisMonth(db(), organizer.id)])
+  const [events, used, checked] = await Promise.all([
+    listEvents(db(), organizer.id),
+    eventsThisMonth(db(), organizer.id),
+    organizer.autoCheck ? autoCheckUsage(db(), organizer.id, startOfMonth()) : Promise.resolve(0),
+  ])
   const limits = planLimits(organizer)
   const t = dict.dashboard
+  const usage = fmt(t.usage, { used, limit: limits.eventsPerMonth, plan: dict.plans[limits.plan] })
+  const addOn = organizer.autoCheck ? ` · ${fmt(t.autoCheckUsage, { n: checked, price: formatMoney(AUTO_CHECK_PRICE_UZS, lang) })}` : ""
 
   return (
     <DashboardShell
       lang={lang}
       dict={dict}
       title={organizer.name}
-      description={fmt(t.usage, { used, limit: limits.eventsPerMonth, plan: dict.plans[limits.plan] })}
+      description={usage + addOn}
       actions={
         <>
           <Button variant="outline" size="sm" asChild>

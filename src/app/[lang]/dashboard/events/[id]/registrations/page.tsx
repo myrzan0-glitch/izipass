@@ -19,7 +19,7 @@ import { getEvent } from "@/lib/events"
 import { isLocale } from "@/lib/i18n/config"
 import { getDictionary } from "@/lib/i18n/dictionaries"
 import { fmt } from "@/lib/i18n/format"
-import { countByStatus, expireHolds, listEventRegistrations } from "@/lib/registrations"
+import { countByStatus, expireHolds, listEventRegistrations, type ReceiptSummary } from "@/lib/registrations"
 
 export async function generateMetadata({ params }: PageProps<"/[lang]/dashboard/events/[id]/registrations">): Promise<Metadata> {
   const { lang } = await params
@@ -39,6 +39,25 @@ async function Content({ params }: { params: PageProps<"/[lang]/dashboard/events
   const counts = countByStatus(rows)
   const t = dict.registrations
   const taken = (counts.held ?? 0) + (counts.proof_sent ?? 0) + (counts.confirmed ?? 0)
+  const autoCheck = organizer.autoCheck && event.priceUzs > 0
+
+  const verdictVariant = { pass: "default", review: "secondary", fail: "destructive" } as const
+  const checkCell = (receipt: ReceiptSummary | null) => {
+    if (!receipt) return <span className="text-xs text-muted-foreground">—</span>
+    if (!receipt.verdict || !receipt.checks) return <span className="text-xs text-muted-foreground">{t.notChecked}</span>
+    const checks = receipt.checks
+    const details = (Object.keys(t.checks) as (keyof typeof checks)[]).filter((k) => checks[k] !== "ok" && checks[k] !== "skipped")
+    return (
+      <div className="flex flex-col gap-1">
+        <Badge variant={verdictVariant[receipt.verdict]}>{t.verdict[receipt.verdict]}</Badge>
+        {details.length > 0 && (
+          <p className="text-xs text-muted-foreground">
+            {details.map((k) => `${t.checks[k]}: ${t.checkResult[checks[k]]}`).join(" · ")}
+          </p>
+        )}
+      </div>
+    )
+  }
 
   const decideForm = (registrationId: string, decision: "confirmed" | "rejected") => (
     <form action={decideRegistrationAction} className="flex items-center gap-2">
@@ -89,11 +108,12 @@ async function Content({ params }: { params: PageProps<"/[lang]/dashboard/events
                   <TableHead>{dict.status.reference}</TableHead>
                   <TableHead>{dict.common.status}</TableHead>
                   <TableHead>{t.receipt}</TableHead>
+                  {autoCheck && <TableHead>{t.check}</TableHead>}
                   <TableHead className="text-right">{t.actions}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rows.map(({ registration: r, receiptId }) => (
+                {rows.map(({ registration: r, receipt, receiptId }) => (
                   <TableRow key={r.id}>
                     <TableCell className="font-medium">
                       {r.name}
@@ -108,6 +128,9 @@ async function Content({ params }: { params: PageProps<"/[lang]/dashboard/events
                     <TableCell>
                       <RegistrationStatusBadge status={r.status} dict={dict.registrationStatus} />
                       {r.checkedInAt && <p className="text-xs text-muted-foreground">{dict.ticket.checkedIn}</p>}
+                      {r.status === "confirmed" && r.decidedAt && !r.decidedBy && (
+                        <p className="text-xs text-muted-foreground">{t.autoConfirmed}</p>
+                      )}
                       {r.rejectReason && <p className="text-xs text-muted-foreground">{r.rejectReason}</p>}
                     </TableCell>
                     <TableCell>
@@ -122,6 +145,7 @@ async function Content({ params }: { params: PageProps<"/[lang]/dashboard/events
                         <span className="text-xs text-muted-foreground">—</span>
                       )}
                     </TableCell>
+                    {autoCheck && <TableCell>{checkCell(receipt)}</TableCell>}
                     <TableCell>
                       {(r.status === "proof_sent" || r.status === "held") && (
                         <div className="flex flex-wrap justify-end gap-2">

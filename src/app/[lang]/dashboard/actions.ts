@@ -44,6 +44,10 @@ function parseOrganizer(form: FormData) {
     name: str(form, "name"),
     description: str(form, "description"),
     links,
+    autoCheck: str(form, "autoCheck") === "on",
+    autoApprove: str(form, "autoApprove") === "on",
+    payoutCardLast4: str(form, "payoutCardLast4"),
+    payoutName: str(form, "payoutName"),
   })
 }
 
