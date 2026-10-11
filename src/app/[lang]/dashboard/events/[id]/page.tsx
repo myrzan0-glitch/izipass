@@ -5,17 +5,20 @@ import { notFound } from "next/navigation"
 import { ExternalLink, ScanLine, Users } from "lucide-react"
 
 import { saveEventAction, setEventStatusAction } from "@/app/[lang]/dashboard/actions"
+import { ConfirmAction } from "@/components/confirm-action"
 import { DashboardShell } from "@/components/dashboard-shell"
 import { EventForm } from "@/components/event-form"
 import { EventStatusBadge } from "@/components/event-status"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { PageSkeleton } from "@/components/page-skeleton"
+import { ShareLink } from "@/components/share-link"
 import { requireOrganizer } from "@/lib/auth/current"
 import { db } from "@/lib/db"
 import { getEvent, planLimits } from "@/lib/events"
 import { isLocale } from "@/lib/i18n/config"
 import { getDictionary } from "@/lib/i18n/dictionaries"
+import { SITE_URL } from "@/lib/site"
 
 export async function generateMetadata({ params }: PageProps<"/[lang]/dashboard/events/[id]">): Promise<Metadata> {
   const { lang } = await params
@@ -84,11 +87,27 @@ async function Content({ params }: { params: PageProps<"/[lang]/dashboard/events
                 </Link>
               </Button>
               {statusForm("draft", t.unpublish, "outline")}
-              {statusForm("cancelled", t.cancel, "destructive")}
+              <ConfirmAction
+                action={setEventStatusAction}
+                fields={{ lang, eventId: event.id, status: "cancelled" }}
+                trigger={t.cancel}
+                triggerVariant="destructive"
+                title={dict.confirm.cancelEventTitle}
+                description={dict.confirm.cancelEventBody}
+                confirm={dict.confirm.cancelEventConfirm}
+                cancel={dict.confirm.keep}
+              />
             </>
           )}
           {event.status === "cancelled" && statusForm("draft", t.restore, "outline")}
         </CardContent>
+        {event.status === "published" && (
+          <CardContent className="flex flex-col gap-2 border-t pt-6">
+            <p className="text-sm font-medium">{dict.share.title}</p>
+            <p className="text-sm text-muted-foreground">{dict.share.hint}</p>
+            <ShareLink url={`${SITE_URL}${publicUrl}`} title={event.title} dict={dict.share} />
+          </CardContent>
+        )}
       </Card>
 
       <Card className="max-w-2xl">

@@ -5,6 +5,7 @@ import { notFound } from "next/navigation"
 import { CalendarDays, MapPin } from "lucide-react"
 
 import { cancelRegistrationAction } from "@/app/[lang]/r/actions"
+import { ConfirmAction } from "@/components/confirm-action"
 import { PageSkeleton } from "@/components/page-skeleton"
 import { ReceiptUpload } from "@/components/receipt-upload"
 import { RegistrationStatusBadge } from "@/components/registration-status"
@@ -165,13 +166,16 @@ async function Content({ params, searchParams }: Props) {
             </Button>
           )}
           {canCancel && (
-            <form action={cancelRegistrationAction}>
-              <input type="hidden" name="lang" value={lang} />
-              <input type="hidden" name="registrationId" value={reg.id} />
-              <Button type="submit" variant="outline">
-                {t.cancel}
-              </Button>
-            </form>
+            <ConfirmAction
+              action={cancelRegistrationAction}
+              fields={{ lang, registrationId: reg.id }}
+              trigger={t.cancel}
+              triggerSize="default"
+              title={dict.confirm.cancelRegistrationTitle}
+              description={paid && reg.status !== "waitlist" ? dict.confirm.cancelRegistrationPaidBody : dict.confirm.cancelRegistrationBody}
+              confirm={dict.confirm.cancelRegistrationConfirm}
+              cancel={dict.confirm.keep}
+            />
           )}
           <Button variant="ghost" asChild>
             <Link href={eventUrl}>{t.backToEvent}</Link>

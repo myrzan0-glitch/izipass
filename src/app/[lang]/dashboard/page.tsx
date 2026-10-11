@@ -116,7 +116,35 @@ async function Dashboard({ lang, dict }: { lang: Locale; dict: Dictionary }) {
           {events.length === 0 && <CardDescription>{t.noEvents}</CardDescription>}
         </CardHeader>
         {events.length > 0 && (
-          <CardContent className="px-3">
+          <CardContent className="flex flex-col gap-3 md:hidden">
+            {events.map((e) => (
+              <div key={e.id} className="flex flex-col gap-3 rounded-lg border p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex min-w-0 flex-col gap-0.5">
+                    <Link href={`/${lang}/dashboard/events/${e.id}`} className="font-medium hover:underline">
+                      {e.title}
+                    </Link>
+                    <p className="text-sm text-muted-foreground">{formatDateTime(e.startsAt, lang)}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {fmt(dict.public.spots, { n: e.capacity })} · {e.priceUzs ? `${formatMoney(e.priceUzs, lang)} ${dict.public.uzs}` : dict.event.free}
+                    </p>
+                  </div>
+                  <EventStatusBadge status={e.status} dict={dict.event.status} />
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="outline" size="sm" asChild>
+                    <Link href={`/${lang}/dashboard/events/${e.id}/registrations`}>{dict.registrations.title}</Link>
+                  </Button>
+                  <Button variant="ghost" size="sm" asChild>
+                    <Link href={`/${lang}/dashboard/events/${e.id}`}>{dict.event.editTitle}</Link>
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        )}
+        {events.length > 0 && (
+          <CardContent className="hidden px-3 md:block">
             <Table>
               <TableHeader>
                 <TableRow>
