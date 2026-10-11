@@ -4,8 +4,9 @@ import { db } from "@/lib/db"
 import { expireHolds, purgeOldReceipts } from "@/lib/registrations"
 
 /**
- * Hourly housekeeping (vercel.json). Holds also expire lazily whenever an
- * event is read, so this is a safety net plus the receipt purge.
+ * Daily housekeeping at 02:00 Tashkent (vercel.json; Hobby plans allow one
+ * run a day). Holds expire lazily whenever an event is read, so this is a
+ * safety net plus the receipt purge.
  */
 export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET

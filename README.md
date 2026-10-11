@@ -12,7 +12,7 @@ izipass never holds money: attendees pay the organizer directly. Pass signing is
 - Languages: uz / ru / kk / en, locale in the URL (`/ru/...`).
 - Tickets: a confirmed registration gets a QR (`/t/<id>~<signature>`, HMAC-signed, nothing stored) and "Add to Apple Wallet / Google Wallet" buttons. Passes are built by the wallet project's `POST /api/v1/passes` (`WALLET_API_URL`, `WALLET_API_KEY`), so Apple and Google credentials never live here.
 - Check-in: `/dashboard/events/[id]/scan` reads QR codes with the camera (ZXing wasm served from `/zxing`, copied on install), verifies them against a ticket list cached on the phone, so it works offline, and syncs check-ins when back online. A reference code can be typed instead.
-- Registrations: a spot is held for the event's payment time limit; the attendee uploads a receipt screenshot (stored in Postgres, purged 30 days after the event); the organizer approves or rejects; a waitlist fills freed spots. Holds expire lazily on every read and hourly via `/api/cron` (`vercel.json`, `CRON_SECRET`).
+- Registrations: a spot is held for the event's payment time limit; the attendee uploads a receipt screenshot (stored in Postgres, purged 30 days after the event); the organizer approves or rejects; a waitlist fills freed spots. Holds expire lazily on every read and daily via `/api/cron` (`vercel.json`, `CRON_SECRET`).
 
 ## Develop
 
