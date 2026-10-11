@@ -74,8 +74,12 @@ async function requestPass(platform: "apple" | "google", ticket: ReturnType<type
     body: JSON.stringify({ platform, ticket }),
     cache: "no-store",
   })
-  if (res.status === 503) throw new WalletServiceError("unavailable")
-  if (!res.ok) throw new WalletServiceError("failed")
+  if (!res.ok) {
+    // 401: WALLET_API_KEY here doesn't match WALLET_API_KEYS in the wallet project.
+    // 503: the wallet project lacks Apple/Google credentials. 422: ticket data rejected.
+    console.error(`[wallet] ${platform} pass: ${res.status} ${(await res.text().catch(() => "")).slice(0, 300)}`)
+    throw new WalletServiceError(res.status === 503 ? "unavailable" : "failed")
+  }
   return res
 }
 
