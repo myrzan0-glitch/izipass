@@ -2,16 +2,19 @@ import { Suspense } from "react"
 import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 import Link from "next/link"
-import { Check, ImageIcon, ScanLine, X } from "lucide-react"
+import { Check, Download, ImageIcon, ScanLine, Search, X } from "lucide-react"
 
 import { decideRegistrationAction } from "@/app/[lang]/dashboard/actions"
 import { ConfirmAction } from "@/components/confirm-action"
 import { DashboardShell } from "@/components/dashboard-shell"
 import { PageSkeleton } from "@/components/page-skeleton"
+import { ReceiptReview } from "@/components/receipt-review"
 import { RegistrationStatusBadge } from "@/components/registration-status"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { requireOrganizer } from "@/lib/auth/current"
 import { db } from "@/lib/db"
@@ -22,6 +25,22 @@ import { fmt } from "@/lib/i18n/format"
 import type { Registration } from "@/lib/db/schema"
 import { countByStatus, expireHolds, listEventRegistrations, type ReceiptSummary } from "@/lib/registrations"
 import { notifyLater } from "@/lib/telegram/notify"
+import { formatMoney } from "@/lib/time"
+
+const TABS = ["review", "confirmed", "all"] as const
+type Tab = (typeof TABS)[number]
+
+/** Search by name, phone (digits only) or reference code. */
+function matches(r: Registration, q: string) {
+  const needle = q.trim().toLowerCase()
+  if (!needle) return true
+  const digits = needle.replace(/\D/g, "")
+  return (
+    r.name.toLowerCase().includes(needle) ||
+    r.referenceCode.toLowerCase().includes(needle) ||
+    (digits.length >= 3 && r.phone.replace(/\D/g, "").includes(digits))
+  )
+}
 
 export async function generateMetadata({ params }: PageProps<"/[lang]/dashboard/events/[id]/registrations">): Promise<Metadata> {
   const { lang } = await params
@@ -29,8 +48,9 @@ export async function generateMetadata({ params }: PageProps<"/[lang]/dashboard/
   return { title: (await getDictionary(lang)).registrations.title, robots: { index: false } }
 }
 
-async function Content({ params }: { params: PageProps<"/[lang]/dashboard/events/[id]/registrations">["params"] }) {
+async function Content({ params, searchParams }: PageProps<"/[lang]/dashboard/events/[id]/registrations">) {
   const { lang, id } = await params
+  const query = await searchParams
   if (!isLocale(lang)) notFound()
   const dict = await getDictionary(lang)
   const { organizer } = await requireOrganizer(lang, `/${lang}/dashboard/events/${id}/registrations`)
@@ -38,9 +58,24 @@ async function Content({ params }: { params: PageProps<"/[lang]/dashboard/events
   if (!event) notFound()
   await expireHolds(db(), event.id)
   notifyLater({ eventId: event.id })
-  const rows = await listEventRegistrations(db(), event.id)
-  const counts = countByStatus(rows)
+  const allRows = await listEventRegistrations(db(), event.id)
+  const counts = countByStatus(allRows)
   const t = dict.registrations
+  const q = typeof query.q === "string" ? query.q.slice(0, 80) : ""
+  const tab: Tab = TABS.find((x) => x === query.tab) ?? ((counts.proof_sent ?? 0) > 0 ? "review" : "all")
+  const tabCount: Record<Tab, number> = { review: counts.proof_sent ?? 0, confirmed: counts.confirmed ?? 0, all: allRows.length }
+  const rows = allRows.filter(
+    ({ registration: r }) =>
+      (tab === "all" || (tab === "review" ? r.status === "proof_sent" : r.status === "confirmed")) && matches(r, q),
+  )
+  const base = `/${lang}/dashboard/events/${event.id}/registrations`
+  const href = (extra: Record<string, string>) => {
+    const sp = new URLSearchParams({ tab, ...(q ? { q } : {}), ...extra })
+    return `${base}?${sp}`
+  }
+  const openId = typeof query.open === "string" ? query.open : null
+  const opened = openId ? allRows.find((r) => r.registration.id === openId && r.receiptId) : undefined
+  const keep = { tab, ...(q ? { q } : {}) }
   const taken = (counts.held ?? 0) + (counts.proof_sent ?? 0) + (counts.confirmed ?? 0)
   const autoCheck = organizer.autoCheck && event.priceUzs > 0
 
@@ -68,6 +103,8 @@ async function Content({ params }: { params: PageProps<"/[lang]/dashboard/events
       <input type="hidden" name="eventId" value={event.id} />
       <input type="hidden" name="registrationId" value={registrationId} />
       <input type="hidden" name="decision" value="confirmed" />
+      <input type="hidden" name="tab" value={tab} />
+      {q && <input type="hidden" name="q" value={q} />}
       <Button type="submit" size="sm">
         <Check />
         {t.approve}
@@ -77,7 +114,7 @@ async function Content({ params }: { params: PageProps<"/[lang]/dashboard/events
   const rejectDialog = (r: Registration) => (
     <ConfirmAction
       action={decideRegistrationAction}
-      fields={{ lang, eventId: event.id, registrationId: r.id, decision: "rejected" }}
+      fields={{ lang, eventId: event.id, registrationId: r.id, decision: "rejected", ...keep }}
       trigger={
         <>
           <X />
@@ -111,13 +148,13 @@ async function Content({ params }: { params: PageProps<"/[lang]/dashboard/events
       {r.rejectReason && <p className="text-xs text-muted-foreground">{r.rejectReason}</p>}
     </div>
   )
-  const receiptButton = (receiptId: string | null) =>
+  const receiptButton = (registrationId: string, receiptId: string | null) =>
     receiptId ? (
       <Button variant="outline" size="sm" asChild>
-        <a href={`/api/receipts/${receiptId}`} target="_blank" rel="noopener">
+        <Link href={href({ open: registrationId })} scroll={false}>
           <ImageIcon />
           {t.openReceipt}
-        </a>
+        </Link>
       </Button>
     ) : null
 
@@ -142,9 +179,44 @@ async function Content({ params }: { params: PageProps<"/[lang]/dashboard/events
       }
     >
       <Card className="gap-4">
-        <CardHeader>
-          <CardTitle>{t.title}</CardTitle>
-          {rows.length === 0 && <CardDescription>{t.empty}</CardDescription>}
+        <CardHeader className="flex flex-col gap-4">
+          <div className="flex w-full flex-wrap items-center justify-between gap-2">
+            <CardTitle>{t.title}</CardTitle>
+            {allRows.length > 0 && (
+              <Button variant="outline" size="sm" asChild>
+                <a href={`/api/events/${event.id}/export?lang=${lang}`} download>
+                  <Download />
+                  {t.export}
+                </a>
+              </Button>
+            )}
+          </div>
+          {allRows.length === 0 ? (
+            <CardDescription>{t.empty}</CardDescription>
+          ) : (
+            <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <Tabs value={tab}>
+                <TabsList>
+                  {TABS.map((key) => (
+                    <TabsTrigger key={key} value={key} asChild>
+                      <Link href={`${base}?${new URLSearchParams({ tab: key, ...(q ? { q } : {}) })}`} replace scroll={false}>
+                        {t.tabs[key]}
+                        <span className="tabular-nums text-muted-foreground">{tabCount[key]}</span>
+                      </Link>
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              </Tabs>
+              <form action={base} className="flex gap-2 sm:w-72">
+                <input type="hidden" name="tab" value={tab} />
+                <Input name="q" type="search" defaultValue={q} placeholder={t.search} aria-label={t.search} />
+                <Button type="submit" variant="outline" size="icon" aria-label={t.searchButton}>
+                  <Search />
+                </Button>
+              </form>
+            </div>
+          )}
+          {allRows.length > 0 && rows.length === 0 && <CardDescription>{t.noMatches}</CardDescription>}
         </CardHeader>
         {rows.length > 0 && (
           <>
@@ -168,7 +240,7 @@ async function Content({ params }: { params: PageProps<"/[lang]/dashboard/events
                   {autoCheck && receipt && <div>{checkCell(receipt)}</div>}
                   {(receiptId || actions(r)) && (
                     <div className="flex flex-wrap items-center gap-2">
-                      {receiptButton(receiptId)}
+                      {receiptButton(r.id, receiptId)}
                       {actions(r)}
                     </div>
                   )}
@@ -202,7 +274,7 @@ async function Content({ params }: { params: PageProps<"/[lang]/dashboard/events
                       </TableCell>
                       <TableCell className="font-mono">{r.referenceCode}</TableCell>
                       <TableCell>{statusBlock(r)}</TableCell>
-                      <TableCell>{receiptButton(receiptId) ?? <span className="text-xs text-muted-foreground">—</span>}</TableCell>
+                      <TableCell>{receiptButton(r.id, receiptId) ?? <span className="text-xs text-muted-foreground">—</span>}</TableCell>
                       {autoCheck && <TableCell>{checkCell(receipt)}</TableCell>}
                       <TableCell>
                         <div className="flex flex-wrap justify-end gap-2">{actions(r)}</div>
@@ -215,14 +287,30 @@ async function Content({ params }: { params: PageProps<"/[lang]/dashboard/events
           </>
         )}
       </Card>
+      {opened?.receiptId && (
+        <ReceiptReview
+          key={opened.registration.id}
+          lang={lang}
+          eventId={event.id}
+          registration={opened.registration}
+          receiptId={opened.receiptId}
+          expected={`${formatMoney(event.priceUzs, lang)} ${dict.public.uzs}`}
+          check={autoCheck && opened.receipt?.verdict ? checkCell(opened.receipt) : undefined}
+          pending={opened.registration.status === "proof_sent" || opened.registration.status === "held"}
+          closeHref={href({})}
+          tab={tab}
+          q={q}
+          dict={dict}
+        />
+      )}
     </DashboardShell>
   )
 }
 
-export default function Page({ params }: PageProps<"/[lang]/dashboard/events/[id]/registrations">) {
+export default function Page(props: PageProps<"/[lang]/dashboard/events/[id]/registrations">) {
   return (
     <Suspense fallback={<PageSkeleton />}>
-      <Content params={params} />
+      <Content {...props} />
     </Suspense>
   )
 }

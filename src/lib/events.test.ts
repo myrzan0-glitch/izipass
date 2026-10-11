@@ -6,7 +6,7 @@ import { beforeAll, describe, expect, it } from "vitest"
 import { upsertTelegramUser } from "@/lib/auth/users"
 import type { Db } from "@/lib/db"
 import * as schema from "@/lib/db/schema"
-import { PlanLimitError, createEvent, eventsThisMonth, getPublicEvent, listPublicEvents, setEventStatus } from "@/lib/events"
+import { PlanLimitError, createEvent, duplicateEvent, eventsThisMonth, getPublicEvent, listPublicEvents, setEventStatus } from "@/lib/events"
 import { SlugTakenError, createOrganizer, getOrganizerForUser } from "@/lib/organizers"
 import { organizerSchema, type EventInput } from "@/lib/validation"
 
@@ -64,5 +64,25 @@ describe("events", () => {
     const [friday] = await db.select().from(schema.events).where((await import("drizzle-orm")).eq(schema.events.slug, "friday"))
     await setEventStatus(db, organizer.id, friday.id, "cancelled")
     expect(await eventsThisMonth(db, organizer.id)).toBe(1)
+  })
+
+  it("duplicates an event as a draft a week later, with a dated address", async () => {
+    const pro = { ...organizer, plan: "pro" as const, planUntil: new Date(Date.now() + 86_400_000) }
+    const source = await createEvent(db, pro, { ...base, slug: "weekly", startsAt: new Date("2026-11-05T14:00:00Z"), endsAt: new Date("2026-11-05T16:00:00Z") })
+    const now = new Date("2026-10-11T12:00:00Z")
+    const copy = (await duplicateEvent(db, pro, source.id, now))!
+    expect(copy.status).toBe("draft")
+    expect(copy.slug).toBe("weekly-2026-11-12")
+    expect(copy.startsAt.toISOString()).toBe("2026-11-12T14:00:00.000Z")
+    expect(copy.endsAt?.toISOString()).toBe("2026-11-12T16:00:00.000Z")
+    expect(copy.priceUzs).toBe(source.priceUzs)
+    // Copying the copy keeps one date in the address; a second copy of the source gets -2.
+    expect((await duplicateEvent(db, pro, copy.id, now))!.slug).toBe("weekly-2026-11-19")
+    expect((await duplicateEvent(db, pro, source.id, now))!.slug).toBe("weekly-2026-11-12-2")
+    // An old event jumps to the first week after today.
+    const old = await createEvent(db, pro, { ...base, slug: "old", startsAt: new Date("2026-09-03T14:00:00Z") })
+    expect((await duplicateEvent(db, pro, old.id, now))!.startsAt.toISOString()).toBe("2026-10-15T14:00:00.000Z")
+    // On the free plan the monthly limit still applies.
+    await expect(duplicateEvent(db, organizer, source.id, now)).rejects.toBeInstanceOf(PlanLimitError)
   })
 })

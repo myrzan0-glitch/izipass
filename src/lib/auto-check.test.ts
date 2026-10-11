@@ -7,9 +7,9 @@ import { upsertTelegramUser } from "@/lib/auth/users"
 import type { Db } from "@/lib/db"
 import * as schema from "@/lib/db/schema"
 import { createEvent, setEventStatus } from "@/lib/events"
-import { createOrganizer, updateOrganizer } from "@/lib/organizers"
+import { createOrganizer, updatePaymentSettings } from "@/lib/organizers"
 import { attachReceipt, autoCheckUsage, getReceipt, listEventRegistrations, recordReceiptText, register } from "@/lib/registrations"
-import { organizerSchema } from "@/lib/validation"
+import { organizerSchema, paymentSettingsSchema } from "@/lib/validation"
 
 let db: Db
 let organizer: schema.Organizer
@@ -17,14 +17,7 @@ let event: schema.Event
 const users: schema.User[] = []
 const input = { name: "Aziza", phone: "+998901234567", note: "" }
 
-const organizerInput = organizerSchema.parse({
-  slug: "esc",
-  name: "ESC",
-  autoCheck: true,
-  autoApprove: true,
-  payoutCardLast4: "1234",
-  payoutName: "Aziza K.",
-})
+const paymentInput = paymentSettingsSchema.parse({ autoCheck: true, autoApprove: true, payoutCardLast4: "1234", payoutName: "Aziza K." })
 
 function receiptText(reg: schema.Registration, date: Date) {
   const d = new Intl.DateTimeFormat("ru-RU", { timeZone: "Asia/Tashkent", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(date)
@@ -36,7 +29,8 @@ beforeAll(async () => {
   await migrate(pg, { migrationsFolder: "./drizzle" })
   db = pg as unknown as Db
   const owner = await upsertTelegramUser(db, { id: "1", first_name: "Org", auth_date: "1", hash: "" }, "ru")
-  organizer = await createOrganizer(db, owner.id, organizerInput)
+  await createOrganizer(db, owner.id, organizerSchema.parse({ slug: "esc", name: "ESC" }))
+  organizer = await updatePaymentSettings(db, (await db.select().from(schema.organizers))[0].id, paymentInput)
   for (let i = 2; i <= 4; i++) users.push(await upsertTelegramUser(db, { id: String(i), first_name: `U${i}`, auth_date: "1", hash: "" }, "ru"))
   event = await createEvent(db, organizer, {
     slug: "thu",
@@ -59,7 +53,8 @@ describe("auto-check", () => {
     expect(organizer.autoCheck).toBe(true)
     expect(organizer.autoApprove).toBe(true)
     expect(organizer.payoutCardLast4).toBe("1234")
-    expect(organizerSchema.safeParse({ ...organizerInput, payoutCardLast4: "12" }).success).toBe(false)
+    expect(paymentSettingsSchema.safeParse({ ...paymentInput, payoutCardLast4: "12" }).success).toBe(false)
+    expect(organizer.slug).toBe("esc")
   })
 
   it("confirms a passing receipt without the organizer", async () => {
@@ -97,7 +92,7 @@ describe("auto-check", () => {
   })
 
   it("does nothing when the add-on is off", async () => {
-    organizer = await updateOrganizer(db, organizer.id, { ...organizerInput, autoCheck: false })
+    organizer = await updatePaymentSettings(db, organizer.id, { ...paymentInput, autoCheck: false })
     const reg = await register(db, event, "esc", (await upsertTelegramUser(db, { id: "9", first_name: "U9", auth_date: "1", hash: "" }, "ru")).id, input)
     const { receiptId } = await attachReceipt(db, reg.id, "image/jpeg", Buffer.from("receipt-d"))
     expect(await recordReceiptText(db, receiptId, receiptText(reg, new Date()))).toBeNull()

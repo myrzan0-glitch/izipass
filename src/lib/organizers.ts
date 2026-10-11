@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm"
 
 import type { Db } from "@/lib/db"
 import { organizerMembers, organizers, type Organizer } from "@/lib/db/schema"
-import type { OrganizerInput } from "@/lib/validation"
+import type { OrganizerInput, PaymentSettingsInput } from "@/lib/validation"
 
 export class SlugTakenError extends Error {}
 
@@ -57,4 +57,9 @@ export async function isMember(db: Db, organizerId: string, userId: string) {
     .where(and(eq(organizerMembers.organizerId, organizerId), eq(organizerMembers.userId, userId)))
     .limit(1)
   return row?.role ?? null
+}
+
+export async function updatePaymentSettings(db: Db, organizerId: string, input: PaymentSettingsInput): Promise<Organizer> {
+  const [organizer] = await db.update(organizers).set(input).where(eq(organizers.id, organizerId)).returning()
+  return organizer
 }

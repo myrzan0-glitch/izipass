@@ -23,7 +23,7 @@ import type { Dictionary } from "@/lib/i18n/dictionaries/en"
 import { fmt } from "@/lib/i18n/format"
 import { getOrganizerForUser } from "@/lib/organizers"
 import { AUTO_CHECK_PRICE_UZS } from "@/lib/db/schema"
-import { autoCheckUsage, listUserRegistrations } from "@/lib/registrations"
+import { autoCheckUsage, listUserRegistrations, registrationCounts } from "@/lib/registrations"
 import { formatDateTime, formatMoney, startOfMonth } from "@/lib/time"
 
 export async function generateMetadata({ params }: PageProps<"/[lang]/dashboard">): Promise<Metadata> {
@@ -79,6 +79,19 @@ async function Dashboard({ lang, dict }: { lang: Locale; dict: Dictionary }) {
     eventsThisMonth(db(), organizer.id),
     organizer.autoCheck ? autoCheckUsage(db(), organizer.id, startOfMonth()) : Promise.resolve(0),
   ])
+  const counts = await registrationCounts(
+    db(),
+    events.map((e) => e.id),
+  )
+  const progress = (e: (typeof events)[number]) => {
+    const c = counts.get(e.id)
+    return (
+      <span className="flex flex-wrap items-center gap-2">
+        <span className="tabular-nums">{fmt(t.taken, { taken: c?.taken ?? 0, capacity: e.capacity })}</span>
+        {!!c?.review && <Badge>{fmt(dict.registrations.toReview, { n: c.review })}</Badge>}
+      </span>
+    )
+  }
   const limits = planLimits(organizer)
   const t = dict.dashboard
   const usage = fmt(t.usage, { used, limit: limits.eventsPerMonth, plan: dict.plans[limits.plan] })
@@ -125,9 +138,8 @@ async function Dashboard({ lang, dict }: { lang: Locale; dict: Dictionary }) {
                       {e.title}
                     </Link>
                     <p className="text-sm text-muted-foreground">{formatDateTime(e.startsAt, lang)}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {fmt(dict.public.spots, { n: e.capacity })} · {e.priceUzs ? `${formatMoney(e.priceUzs, lang)} ${dict.public.uzs}` : dict.event.free}
-                    </p>
+                    <p className="text-sm text-muted-foreground">{e.priceUzs ? `${formatMoney(e.priceUzs, lang)} ${dict.public.uzs}` : dict.event.free}</p>
+                    <div className="text-sm text-muted-foreground">{progress(e)}</div>
                   </div>
                   <EventStatusBadge status={e.status} dict={dict.event.status} />
                 </div>
@@ -165,7 +177,7 @@ async function Dashboard({ lang, dict }: { lang: Locale; dict: Dictionary }) {
                       </Link>
                     </TableCell>
                     <TableCell className="whitespace-nowrap">{formatDateTime(e.startsAt, lang)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{e.capacity}</TableCell>
+                    <TableCell className="text-right text-sm">{progress(e)}</TableCell>
                     <TableCell className="text-right tabular-nums">
                       {e.priceUzs ? formatMoney(e.priceUzs, lang) : <Badge variant="outline">{dict.event.free}</Badge>}
                     </TableCell>

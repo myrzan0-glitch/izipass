@@ -4,7 +4,8 @@ import type { Db } from "@/lib/db"
 import { isUuid } from "@/lib/ids"
 import { PLAN_LIMITS, events, organizers, type Event, type EventStatus, type Organizer, type Plan } from "@/lib/db/schema"
 import { SlugTakenError } from "@/lib/organizers"
-import { startOfMonth } from "@/lib/time"
+import { SLUG_PATTERN } from "@/lib/slug"
+import { startOfMonth, toLocalInput } from "@/lib/time"
 import type { EventInput } from "@/lib/validation"
 
 export class PlanLimitError extends Error {
@@ -100,4 +101,45 @@ export async function getPublicEvent(db: Db, organizerSlug: string, eventSlug: s
     .where(and(eq(organizers.slug, organizerSlug), eq(events.slug, eventSlug), ne(events.status, "draft")))
     .limit(1)
   return row ?? null
+}
+
+const WEEK_MS = 7 * 86_400_000
+
+/**
+ * A copy of an event as a new draft, a week later (or the first week after
+ * today, for an old event): weekly clubs repeat the same event. The address
+ * gets the new date, e.g. thursday-club-2026-11-12.
+ */
+export async function duplicateEvent(db: Db, organizer: Organizer, eventId: string, now = new Date()): Promise<Event | null> {
+  const source = await getEvent(db, organizer.id, eventId)
+  if (!source) return null
+  let shift = WEEK_MS
+  while (source.startsAt.getTime() + shift < now.getTime()) shift += WEEK_MS
+  const startsAt = new Date(source.startsAt.getTime() + shift)
+  const endsAt = source.endsAt ? new Date(source.endsAt.getTime() + shift) : null
+  const date = toLocalInput(startsAt).slice(0, 10)
+  const base = source.slug.replace(/-\d{4}-\d{2}-\d{2}(-\d+)?$/, "").slice(0, 48 - date.length - 4).replace(/-+$/, "")
+  const input: EventInput = {
+    slug: "",
+    title: source.title,
+    description: source.description,
+    startsAt,
+    endsAt,
+    venue: source.venue,
+    venueUrl: source.venueUrl ?? "",
+    capacity: Math.min(source.capacity, planLimits(organizer).participantsPerEvent),
+    priceUzs: source.priceUzs,
+    paymentInstructions: source.paymentInstructions,
+    holdMinutes: source.holdMinutes,
+  }
+  for (let n = 1; n <= 20; n++) {
+    const slug = [base, date, n > 1 ? String(n) : ""].filter(Boolean).join("-")
+    if (!SLUG_PATTERN.test(slug)) continue
+    try {
+      return await createEvent(db, organizer, { ...input, slug })
+    } catch (error) {
+      if (!(error instanceof SlugTakenError)) throw error
+    }
+  }
+  throw new SlugTakenError(base)
 }

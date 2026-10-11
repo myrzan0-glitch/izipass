@@ -2,13 +2,14 @@ import { Suspense } from "react"
 import type { Metadata } from "next"
 import Link from "next/link"
 import { notFound } from "next/navigation"
-import { ExternalLink, ScanLine, Users } from "lucide-react"
+import { Copy, ExternalLink, ScanLine, Users } from "lucide-react"
 
-import { saveEventAction, setEventStatusAction } from "@/app/[lang]/dashboard/actions"
+import { duplicateEventAction, saveEventAction, setEventStatusAction } from "@/app/[lang]/dashboard/actions"
 import { ConfirmAction } from "@/components/confirm-action"
 import { DashboardShell } from "@/components/dashboard-shell"
 import { EventForm } from "@/components/event-form"
 import { EventStatusBadge } from "@/components/event-status"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { PageSkeleton } from "@/components/page-skeleton"
@@ -18,6 +19,7 @@ import { db } from "@/lib/db"
 import { getEvent, planLimits } from "@/lib/events"
 import { isLocale } from "@/lib/i18n/config"
 import { getDictionary } from "@/lib/i18n/dictionaries"
+import { fmt } from "@/lib/i18n/format"
 import { SITE_URL } from "@/lib/site"
 
 export async function generateMetadata({ params }: PageProps<"/[lang]/dashboard/events/[id]">): Promise<Metadata> {
@@ -26,8 +28,9 @@ export async function generateMetadata({ params }: PageProps<"/[lang]/dashboard/
   return { title: (await getDictionary(lang)).event.editTitle, robots: { index: false } }
 }
 
-async function Content({ params }: { params: PageProps<"/[lang]/dashboard/events/[id]">["params"] }) {
+async function Content({ params, searchParams }: PageProps<"/[lang]/dashboard/events/[id]">) {
   const { lang, id } = await params
+  const query = await searchParams
   if (!isLocale(lang)) notFound()
   const dict = await getDictionary(lang)
   const { organizer } = await requireOrganizer(lang, `/${lang}/dashboard/events/${id}`)
@@ -67,10 +70,29 @@ async function Content({ params }: { params: PageProps<"/[lang]/dashboard/events
               {dict.scan.title}
             </Link>
           </Button>
+          <form action={duplicateEventAction}>
+            <input type="hidden" name="lang" value={lang} />
+            <input type="hidden" name="eventId" value={event.id} />
+            <Button type="submit" variant="outline" size="sm">
+              <Copy />
+              {t.duplicate}
+            </Button>
+          </form>
           <EventStatusBadge status={event.status} dict={t.status} />
         </>
       }
     >
+      {query.duplicated === "1" && (
+        <Alert>
+          <Copy />
+          <AlertDescription>{t.duplicated}</AlertDescription>
+        </Alert>
+      )}
+      {query.error === "eventsPerMonth" && (
+        <Alert variant="destructive">
+          <AlertDescription>{fmt(dict.errors.eventsPerMonth, {})}</AlertDescription>
+        </Alert>
+      )}
       <Card>
         <CardHeader>
           <CardTitle>{t.publishing}</CardTitle>
@@ -129,10 +151,10 @@ async function Content({ params }: { params: PageProps<"/[lang]/dashboard/events
   )
 }
 
-export default function EditEventPage({ params }: PageProps<"/[lang]/dashboard/events/[id]">) {
+export default function EditEventPage(props: PageProps<"/[lang]/dashboard/events/[id]">) {
   return (
     <Suspense fallback={<PageSkeleton />}>
-      <Content params={params} />
+      <Content {...props} />
     </Suspense>
   )
 }

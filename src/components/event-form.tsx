@@ -3,6 +3,7 @@
 import { useActionState, useState } from "react"
 
 import { Button } from "@/components/ui/button"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -25,6 +26,12 @@ type Props = {
   dict: Dictionary
 }
 
+/** "50000" → "50 000" while typing; the server keeps only the digits. */
+function groupDigits(value: string) {
+  const digits = value.replace(/\D/g, "").replace(/^0+(?=\d)/, "")
+  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, " ")
+}
+
 export function EventForm({ lang, event, organizerSlug, maxCapacity, action, dict }: Props) {
   const [state, formAction, pending] = useActionState(action, null)
   const v = (key: string, fallback = "") => state?.values?.[key] ?? fallback
@@ -38,7 +45,10 @@ export function EventForm({ lang, event, organizerSlug, maxCapacity, action, dic
 
   const [slug, setSlug] = useState(v("slug", event?.slug ?? ""))
   const [slugTouched, setSlugTouched] = useState(!!event)
-  const [price, setPrice] = useState(v("priceUzs", String(event?.priceUzs ?? 0)))
+  const [price, setPrice] = useState(groupDigits(v("priceUzs", String(event?.priceUzs ?? 0))))
+  const priceValue = Number(price.replace(/\D/g, "") || 0)
+  // The address is generated from the title; it opens for editing only on request or on an error.
+  const [slugOpen, setSlugOpen] = useState(!!err("slug"))
 
   return (
     <form action={formAction} noValidate>
@@ -60,85 +70,122 @@ export function EventForm({ lang, event, organizerSlug, maxCapacity, action, dic
           {err("title") && <FieldError>{err("title")}</FieldError>}
         </Field>
 
-        <Field data-invalid={!!err("slug")}>
-          <FieldLabel htmlFor="slug">{t.slug}</FieldLabel>
-          <Input
-            id="slug"
-            name="slug"
-            value={slug}
-            onChange={(e) => {
-              setSlugTouched(true)
-              setSlug(e.target.value)
-            }}
-            maxLength={48}
-            aria-invalid={!!err("slug")}
-            required
-          />
-          <FieldDescription className="font-mono text-xs">
-            /{lang}/o/{organizerSlug}/{slug || "…"}
-          </FieldDescription>
-          {err("slug") && <FieldError>{err("slug")}</FieldError>}
-        </Field>
-
-        <div className="grid gap-6 sm:grid-cols-2">
-          <Field data-invalid={!!err("startsAt")}>
-            <FieldLabel htmlFor="startsAt">{t.startsAt}</FieldLabel>
-            <Input
-              id="startsAt"
-              name="startsAt"
-              type="datetime-local"
-              defaultValue={v("startsAt", event ? toLocalInput(event.startsAt) : "")}
-              aria-invalid={!!err("startsAt")}
-              required
-            />
-            <FieldDescription>{t.timeZoneHint}</FieldDescription>
-            {err("startsAt") && <FieldError>{err("startsAt")}</FieldError>}
+        <Collapsible open={slugOpen} onOpenChange={setSlugOpen}>
+          <Field data-invalid={!!err("slug")}>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <FieldLabel htmlFor="slug" className="text-muted-foreground">
+                {t.link}
+              </FieldLabel>
+              <span className="min-w-0 truncate font-mono text-xs text-muted-foreground">
+                /{lang}/o/{organizerSlug}/{slug || "…"}
+              </span>
+              {!slugOpen && (
+                <CollapsibleTrigger asChild>
+                  <Button type="button" variant="link" size="sm" className="h-auto px-0">
+                    {t.changeLink}
+                  </Button>
+                </CollapsibleTrigger>
+              )}
+            </div>
+            {/* Always submitted; the input is only shown when opened. */}
+            {!slugOpen && <input type="hidden" name="slug" value={slug} />}
+            <CollapsibleContent>
+              <Input
+                id="slug"
+                name="slug"
+                value={slug}
+                onChange={(e) => {
+                  setSlugTouched(true)
+                  setSlug(e.target.value)
+                }}
+                maxLength={48}
+                aria-invalid={!!err("slug")}
+                required
+              />
+            </CollapsibleContent>
+            {err("slug") && <FieldError>{err("slug")}</FieldError>}
           </Field>
-          <Field data-invalid={!!err("endsAt")}>
-            <FieldLabel htmlFor="endsAt">{t.endsAt}</FieldLabel>
-            <Input
-              id="endsAt"
-              name="endsAt"
-              type="datetime-local"
-              defaultValue={v("endsAt", event?.endsAt ? toLocalInput(event.endsAt) : "")}
-              aria-invalid={!!err("endsAt")}
+        </Collapsible>
+
+        <FieldSet>
+          <FieldLegend>{t.sectionWhen}</FieldLegend>
+          <div className="grid gap-6 sm:grid-cols-2">
+            <Field data-invalid={!!err("startsAt")}>
+              <FieldLabel htmlFor="startsAt">{t.startsAt}</FieldLabel>
+              <Input
+                id="startsAt"
+                name="startsAt"
+                type="datetime-local"
+                defaultValue={v("startsAt", event ? toLocalInput(event.startsAt) : "")}
+                aria-invalid={!!err("startsAt")}
+                required
+              />
+              <FieldDescription>{t.timeZoneHint}</FieldDescription>
+              {err("startsAt") && <FieldError>{err("startsAt")}</FieldError>}
+            </Field>
+            <Field data-invalid={!!err("endsAt")}>
+              <FieldLabel htmlFor="endsAt">{t.endsAt}</FieldLabel>
+              <Input
+                id="endsAt"
+                name="endsAt"
+                type="datetime-local"
+                defaultValue={v("endsAt", event?.endsAt ? toLocalInput(event.endsAt) : "")}
+                aria-invalid={!!err("endsAt")}
+              />
+              {err("endsAt") && <FieldError>{err("endsAt")}</FieldError>}
+            </Field>
+          </div>
+        </FieldSet>
+
+        <FieldSet>
+          <FieldLegend>{t.sectionPlace}</FieldLegend>
+          <FieldGroup>
+            <Field data-invalid={!!err("venue")}>
+              <FieldLabel htmlFor="venue">{t.venue}</FieldLabel>
+              <Input
+                id="venue"
+                name="venue"
+                defaultValue={v("venue", event?.venue ?? "")}
+                placeholder={t.venuePlaceholder}
+                maxLength={160}
+              />
+              {err("venue") && <FieldError>{err("venue")}</FieldError>}
+            </Field>
+
+            <Field data-invalid={!!err("venueUrl")}>
+              <FieldLabel htmlFor="venueUrl">{t.venueUrl}</FieldLabel>
+              <Input
+                id="venueUrl"
+                name="venueUrl"
+                type="url"
+                inputMode="url"
+                defaultValue={v("venueUrl", event?.venueUrl ?? "")}
+                placeholder="https://maps.app.goo.gl/…"
+                aria-invalid={!!err("venueUrl")}
+              />
+              {err("venueUrl") && <FieldError>{err("venueUrl")}</FieldError>}
+            </Field>
+          </FieldGroup>
+        </FieldSet>
+
+        <FieldSet>
+          <FieldLegend>{t.sectionAbout}</FieldLegend>
+
+          <Field data-invalid={!!err("description")}>
+            <FieldLabel htmlFor="description" className="sr-only">
+              {t.description}
+            </FieldLabel>
+            <Textarea
+              id="description"
+              name="description"
+              rows={6}
+              defaultValue={v("description", event?.description ?? "")}
+              placeholder={t.descriptionPlaceholder}
+              maxLength={4000}
             />
-            {err("endsAt") && <FieldError>{err("endsAt")}</FieldError>}
+            {err("description") && <FieldError>{err("description")}</FieldError>}
           </Field>
-        </div>
-
-        <Field data-invalid={!!err("venue")}>
-          <FieldLabel htmlFor="venue">{t.venue}</FieldLabel>
-          <Input id="venue" name="venue" defaultValue={v("venue", event?.venue ?? "")} placeholder={t.venuePlaceholder} maxLength={160} />
-          {err("venue") && <FieldError>{err("venue")}</FieldError>}
-        </Field>
-
-        <Field data-invalid={!!err("venueUrl")}>
-          <FieldLabel htmlFor="venueUrl">{t.venueUrl}</FieldLabel>
-          <Input
-            id="venueUrl"
-            name="venueUrl"
-            type="url"
-            inputMode="url"
-            defaultValue={v("venueUrl", event?.venueUrl ?? "")}
-            placeholder="https://maps.app.goo.gl/…"
-            aria-invalid={!!err("venueUrl")}
-          />
-          {err("venueUrl") && <FieldError>{err("venueUrl")}</FieldError>}
-        </Field>
-
-        <Field data-invalid={!!err("description")}>
-          <FieldLabel htmlFor="description">{t.description}</FieldLabel>
-          <Textarea
-            id="description"
-            name="description"
-            rows={6}
-            defaultValue={v("description", event?.description ?? "")}
-            placeholder={t.descriptionPlaceholder}
-            maxLength={4000}
-          />
-          {err("description") && <FieldError>{err("description")}</FieldError>}
-        </Field>
+        </FieldSet>
 
         <FieldSet>
           <FieldLegend>{t.registration}</FieldLegend>
@@ -165,12 +212,11 @@ export function EventForm({ lang, event, organizerSlug, maxCapacity, action, dic
                 <Input
                   id="priceUzs"
                   name="priceUzs"
-                  type="number"
+                  type="text"
                   inputMode="numeric"
-                  min={0}
-                  step={1000}
+                  autoComplete="off"
                   value={price}
-                  onChange={(e) => setPrice(e.target.value)}
+                  onChange={(e) => setPrice(groupDigits(e.target.value))}
                   aria-invalid={!!err("priceUzs")}
                   required
                 />
@@ -179,7 +225,7 @@ export function EventForm({ lang, event, organizerSlug, maxCapacity, action, dic
               </Field>
             </div>
 
-            {Number(price) > 0 && (
+            {priceValue > 0 && (
               <>
                 <Field data-invalid={!!err("paymentInstructions")}>
                   <FieldLabel htmlFor="paymentInstructions">{t.paymentInstructions}</FieldLabel>
@@ -215,7 +261,7 @@ export function EventForm({ lang, event, organizerSlug, maxCapacity, action, dic
                 </Field>
               </>
             )}
-            {Number(price) <= 0 && <input type="hidden" name="holdMinutes" value={String(event?.holdMinutes ?? 30)} />}
+            {priceValue <= 0 && <input type="hidden" name="holdMinutes" value={String(event?.holdMinutes ?? 30)} />}
           </FieldGroup>
         </FieldSet>
 

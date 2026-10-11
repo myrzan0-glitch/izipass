@@ -408,3 +408,36 @@ export async function undoCheckIn(db: Db, eventId: string, registrationId: strin
     .returning()
   return updated ?? null
 }
+
+export type EventCounts = { taken: number; review: number; confirmed: number; waitlist: number }
+
+/** Spots taken, receipts to review, confirmed and waitlisted, per event. */
+export async function registrationCounts(db: Db, eventIds: string[]) {
+  const out = new Map<string, EventCounts>()
+  if (eventIds.length === 0) return out
+  const rows = await db
+    .select({ eventId: registrations.eventId, status: registrations.status, n: count() })
+    .from(registrations)
+    .where(inArray(registrations.eventId, eventIds))
+    .groupBy(registrations.eventId, registrations.status)
+  for (const { eventId, status, n } of rows) {
+    const c = out.get(eventId) ?? { taken: 0, review: 0, confirmed: 0, waitlist: 0 }
+    if (ACTIVE.includes(status)) c.taken += n
+    if (status === "proof_sent") c.review += n
+    if (status === "confirmed") c.confirmed += n
+    if (status === "waitlist") c.waitlist += n
+    out.set(eventId, c)
+  }
+  return out
+}
+
+/** The oldest receipt still waiting for the organizer, other than `exceptId`. */
+export async function nextToReview(db: Db, eventId: string, exceptId?: string) {
+  const [row] = await db
+    .select({ id: registrations.id })
+    .from(registrations)
+    .where(and(eq(registrations.eventId, eventId), eq(registrations.status, "proof_sent"), exceptId ? ne(registrations.id, exceptId) : undefined))
+    .orderBy(asc(registrations.updatedAt))
+    .limit(1)
+  return row?.id ?? null
+}

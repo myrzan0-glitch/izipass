@@ -4,22 +4,26 @@ import { redirect } from "next/navigation"
 
 import { getSession } from "@/lib/auth/session"
 import { db } from "@/lib/db"
-import { PlanLimitError, createEvent, getEvent, setEventStatus, updateEvent } from "@/lib/events"
+import { PlanLimitError, createEvent, duplicateEvent, getEvent, setEventStatus, updateEvent } from "@/lib/events"
 import { DEFAULT_LOCALE, isLocale } from "@/lib/i18n/config"
-import { SlugTakenError, createOrganizer, getOrganizerForUser, updateOrganizer } from "@/lib/organizers"
-import { RegistrationError, decide } from "@/lib/registrations"
+import { SlugTakenError, createOrganizer, getOrganizerForUser, updateOrganizer, updatePaymentSettings } from "@/lib/organizers"
+import { RegistrationError, decide, nextToReview } from "@/lib/registrations"
 import { SITE_URL } from "@/lib/site"
 import { telegramApiFromEnv } from "@/lib/telegram/api"
 import { connectWebhook } from "@/lib/telegram/webhook"
 import { fromLocalInput } from "@/lib/time"
-import { eventSchema, fieldErrors, organizerSchema } from "@/lib/validation"
+import { eventSchema, fieldErrors, organizerSchema, paymentSettingsSchema } from "@/lib/validation"
 import { notifyLater } from "@/lib/telegram/notify"
 
 /** Field → error key (under `errors` in the dictionary). `form` is a general error. */
 export type ActionState = { errors?: Record<string, string>; values?: Record<string, string> } | null
 
 const str = (form: FormData, key: string) => String(form.get(key) ?? "")
-const num = (form: FormData, key: string) => Number(str(form, key).replace(/\s+/g, ""))
+// Prices arrive formatted ("50 000", "50,000"): keep the digits.
+const num = (form: FormData, key: string) => {
+  const raw = str(form, key).replace(/[\s,'’]+/g, "")
+  return raw === "" ? NaN : Number(raw)
+}
 
 function langOf(form: FormData) {
   const lang = str(form, "lang")
@@ -48,10 +52,6 @@ function parseOrganizer(form: FormData) {
     name: str(form, "name"),
     description: str(form, "description"),
     links,
-    autoCheck: str(form, "autoCheck") === "on",
-    autoApprove: str(form, "autoApprove") === "on",
-    payoutCardLast4: str(form, "payoutCardLast4"),
-    payoutName: str(form, "payoutName"),
   })
 }
 
@@ -61,15 +61,50 @@ export async function saveOrganizerAction(_prev: ActionState, form: FormData): P
   const parsed = parseOrganizer(form)
   if (!parsed.success) return { errors: fieldErrors(parsed.error), values: values(form) }
 
+  let existing
   try {
-    const existing = await getOrganizerForUser(db(), userId)
+    existing = await getOrganizerForUser(db(), userId)
     if (existing) await updateOrganizer(db(), existing.id, parsed.data)
     else await createOrganizer(db(), userId, parsed.data)
   } catch (error) {
     if (error instanceof SlugTakenError) return { errors: { slug: "slugTaken" }, values: values(form) }
     throw error
   }
-  redirect(`/${lang}/dashboard`)
+  redirect(existing ? `/${lang}/dashboard/organizer?saved=1` : `/${lang}/dashboard`)
+}
+
+/** Organizer settings → Payments: auto-check add-on and payout card details. */
+export async function savePaymentSettingsAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  const lang = langOf(form)
+  const userId = await currentUserId()
+  const organizer = await getOrganizerForUser(db(), userId)
+  if (!organizer) redirect(`/${lang}/dashboard`)
+  const parsed = paymentSettingsSchema.safeParse({
+    autoCheck: str(form, "autoCheck") === "on",
+    autoApprove: str(form, "autoApprove") === "on",
+    payoutCardLast4: str(form, "payoutCardLast4"),
+    payoutName: str(form, "payoutName"),
+  })
+  if (!parsed.success) return { errors: fieldErrors(parsed.error), values: values(form) }
+  await updatePaymentSettings(db(), organizer.id, parsed.data)
+  redirect(`/${lang}/dashboard/organizer?tab=payments&saved=1`)
+}
+
+/** Copies an event as a draft a week later (weekly clubs). */
+export async function duplicateEventAction(form: FormData) {
+  const lang = langOf(form)
+  const userId = await currentUserId()
+  const organizer = await getOrganizerForUser(db(), userId)
+  if (!organizer) redirect(`/${lang}/dashboard`)
+  const eventId = str(form, "eventId")
+  let copyId: string | null = null
+  try {
+    copyId = (await duplicateEvent(db(), organizer, eventId))?.id ?? null
+  } catch (error) {
+    if (error instanceof PlanLimitError) redirect(`/${lang}/dashboard/events/${eventId}?error=${error.limit}`)
+    throw error
+  }
+  redirect(copyId ? `/${lang}/dashboard/events/${copyId}?duplicated=1` : `/${lang}/dashboard`)
 }
 
 function parseEvent(form: FormData) {
@@ -136,13 +171,22 @@ export async function decideRegistrationAction(form: FormData) {
   // Only events of this organizer: `decide` matches on eventId, and the event must belong to them.
   const event = await getEvent(db(), organizer.id, eventId)
   if (!event) redirect(`/${lang}/dashboard`)
+  const registrationId = str(form, "registrationId")
   try {
-    await decide(db(), event.id, str(form, "registrationId"), decision, userId, str(form, "reason").slice(0, 200))
+    await decide(db(), event.id, registrationId, decision, userId, str(form, "reason").slice(0, 200))
   } catch (error) {
     if (!(error instanceof RegistrationError)) throw error
   }
   notifyLater({ eventId: event.id })
-  redirect(`/${lang}/dashboard/events/${eventId}/registrations`)
+  // Keep the organizer's tab and search; from the receipt dialog, open the next receipt.
+  const query = new URLSearchParams()
+  for (const key of ["tab", "q"]) if (str(form, key)) query.set(key, str(form, key))
+  if (str(form, "reviewNext") === "1") {
+    const next = await nextToReview(db(), event.id, registrationId)
+    if (next) query.set("open", next)
+  }
+  const qs = query.toString()
+  redirect(`/${lang}/dashboard/events/${eventId}/registrations${qs ? `?${qs}` : ""}`)
 }
 
 /** Organizer page: point the bot's webhook at this site again. */
@@ -158,5 +202,5 @@ export async function reconnectTelegramAction(form: FormData) {
       console.error("[telegram] reconnect failed", error)
     }
   }
-  redirect(`/${lang}/dashboard/organizer`)
+  redirect(`/${lang}/dashboard/organizer?tab=telegram`)
 }

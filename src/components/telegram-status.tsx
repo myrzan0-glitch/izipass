@@ -29,7 +29,7 @@ export async function TelegramStatus({ lang, user, dict }: { lang: Locale; user:
   const ok = !!status?.connected && !status.lastError
 
   return (
-    <Card className="max-w-xl">
+    <Card>
       <CardHeader>
         <CardTitle>{t.title}</CardTitle>
         <CardDescription>{t.hint}</CardDescription>
