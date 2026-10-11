@@ -54,6 +54,7 @@ export function AppHeader({
   active,
   variant = "app",
   createHref,
+  sections,
 }: {
   lang: Locale
   dict: Dictionary
@@ -61,6 +62,8 @@ export function AppHeader({
   variant?: "app" | "public"
   /** Where Create event goes; from My organizations it keeps that section (and the organization). */
   createHref?: string
+  /** Section links on public pages, such as How it works and Pricing on the landing page. */
+  sections?: { href: string; label: string }[]
 }) {
   const app = variant === "app"
   const t = dict.app
@@ -93,6 +96,15 @@ export function AppHeader({
                   <Icon />
                   {label}
                 </Link>
+              </Button>
+            ))}
+          </nav>
+        )}
+        {sections && (
+          <nav className="hidden items-center gap-1 md:flex">
+            {sections.map((link) => (
+              <Button key={link.href} variant="ghost" size="sm" className="text-muted-foreground" asChild>
+                <a href={link.href}>{link.label}</a>
               </Button>
             ))}
           </nav>

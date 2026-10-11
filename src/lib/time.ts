@@ -40,6 +40,17 @@ export function formatDateTime(date: Date, locale: Locale) {
   }).format(date)
 }
 
+/** "Thu 19:00": a weekday and a time, for sample tickets. */
+export function formatWeekdayTime(date: Date, locale: Locale) {
+  return new Intl.DateTimeFormat(INTL_LOCALE[locale], {
+    timeZone: TIME_ZONE,
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(date)
+}
+
 export function formatDate(date: Date, locale: Locale) {
   return new Intl.DateTimeFormat(INTL_LOCALE[locale], { timeZone: TIME_ZONE, day: "numeric", month: "short" }).format(date)
 }
