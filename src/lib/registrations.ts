@@ -1,7 +1,8 @@
 import { randomInt } from "node:crypto"
-import { and, asc, count, desc, eq, inArray, isNotNull, lt } from "drizzle-orm"
+import { and, asc, count, desc, eq, inArray, isNotNull, isNull, lt } from "drizzle-orm"
 
 import type { Db } from "@/lib/db"
+import { isUuid } from "@/lib/ids"
 import { events, organizers, receipts, registrations, type Event, type Registration, type RegistrationStatus } from "@/lib/db/schema"
 
 /** Statuses that take a spot. */
@@ -127,6 +128,7 @@ export async function register(db: Db, event: Event, organizerSlug: string, user
 }
 
 export async function getRegistration(db: Db, id: string) {
+  if (!isUuid(id)) return null
   const [row] = await db
     .select({ registration: registrations, event: events, organizer: organizers })
     .from(registrations)
@@ -191,6 +193,7 @@ export async function attachReceipt(db: Db, registrationId: string, contentType:
 }
 
 export async function getReceipt(db: Db, receiptId: string) {
+  if (!isUuid(receiptId)) return null
   const [row] = await db
     .select({ receipt: receipts, registration: registrations })
     .from(receipts)
@@ -268,4 +271,43 @@ export async function purgeOldReceipts(db: Db, now = new Date()) {
     ),
   )
   return old.length
+}
+
+export class CheckInError extends Error {
+  constructor(public readonly code: "notFound" | "notConfirmed") {
+    super(code)
+  }
+}
+
+/**
+ * Marks a confirmed registration as checked in. Idempotent: a second scan
+ * returns the first check-in time, so the door staff see "already in".
+ */
+export async function checkIn(db: Db, eventId: string, registrationId: string, byUserId: string, at = new Date()) {
+  const [reg] = await db
+    .select()
+    .from(registrations)
+    .where(and(eq(registrations.id, registrationId), eq(registrations.eventId, eventId)))
+    .limit(1)
+  if (!reg) throw new CheckInError("notFound")
+  if (reg.status !== "confirmed") throw new CheckInError("notConfirmed")
+  if (reg.checkedInAt) return { registration: reg, already: true as const }
+  const [updated] = await db
+    .update(registrations)
+    .set({ checkedInAt: at, checkedInBy: byUserId, updatedAt: at })
+    .where(and(eq(registrations.id, registrationId), isNull(registrations.checkedInAt)))
+    .returning()
+  // Lost the race to another device: report that one's time.
+  if (!updated) return { registration: (await db.select().from(registrations).where(eq(registrations.id, registrationId)))[0], already: true as const }
+  return { registration: updated, already: false as const }
+}
+
+/** Undo a mistaken check-in. */
+export async function undoCheckIn(db: Db, eventId: string, registrationId: string, now = new Date()) {
+  const [updated] = await db
+    .update(registrations)
+    .set({ checkedInAt: null, checkedInBy: null, updatedAt: now })
+    .where(and(eq(registrations.id, registrationId), eq(registrations.eventId, eventId)))
+    .returning()
+  return updated ?? null
 }

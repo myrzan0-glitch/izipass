@@ -1,6 +1,7 @@
 import { and, asc, count, desc, eq, gte, ne } from "drizzle-orm"
 
 import type { Db } from "@/lib/db"
+import { isUuid } from "@/lib/ids"
 import { PLAN_LIMITS, events, organizers, type Event, type EventStatus, type Organizer, type Plan } from "@/lib/db/schema"
 import { SlugTakenError } from "@/lib/organizers"
 import { startOfMonth } from "@/lib/time"
@@ -72,6 +73,7 @@ export async function listEvents(db: Db, organizerId: string) {
 }
 
 export async function getEvent(db: Db, organizerId: string, eventId: string) {
+  if (!isUuid(eventId)) return null
   const [event] = await db
     .select()
     .from(events)

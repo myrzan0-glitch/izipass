@@ -1,7 +1,8 @@
 import { Suspense } from "react"
 import type { Metadata } from "next"
 import { notFound } from "next/navigation"
-import { Check, ImageIcon, X } from "lucide-react"
+import Link from "next/link"
+import { Check, ImageIcon, ScanLine, X } from "lucide-react"
 
 import { decideRegistrationAction } from "@/app/[lang]/dashboard/actions"
 import { DashboardShell } from "@/components/dashboard-shell"
@@ -64,6 +65,12 @@ async function Content({ params }: { params: PageProps<"/[lang]/dashboard/events
         <>
           {(counts.proof_sent ?? 0) > 0 && <Badge>{fmt(t.toReview, { n: counts.proof_sent ?? 0 })}</Badge>}
           <Badge variant="secondary">{fmt(t.confirmedCount, { n: counts.confirmed ?? 0 })}</Badge>
+          <Button size="sm" asChild>
+            <Link href={`/${lang}/dashboard/events/${event.id}/scan`}>
+              <ScanLine />
+              {dict.scan.title}
+            </Link>
+          </Button>
         </>
       }
     >
@@ -100,6 +107,7 @@ async function Content({ params }: { params: PageProps<"/[lang]/dashboard/events
                     <TableCell className="font-mono">{r.referenceCode}</TableCell>
                     <TableCell>
                       <RegistrationStatusBadge status={r.status} dict={dict.registrationStatus} />
+                      {r.checkedInAt && <p className="text-xs text-muted-foreground">{dict.ticket.checkedIn}</p>}
                       {r.rejectReason && <p className="text-xs text-muted-foreground">{r.rejectReason}</p>}
                     </TableCell>
                     <TableCell>

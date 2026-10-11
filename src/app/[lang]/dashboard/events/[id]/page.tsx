@@ -2,7 +2,7 @@ import { Suspense } from "react"
 import type { Metadata } from "next"
 import Link from "next/link"
 import { notFound } from "next/navigation"
-import { ExternalLink, Users } from "lucide-react"
+import { ExternalLink, ScanLine, Users } from "lucide-react"
 
 import { saveEventAction, setEventStatusAction } from "@/app/[lang]/dashboard/actions"
 import { DashboardShell } from "@/components/dashboard-shell"
@@ -56,6 +56,12 @@ async function Content({ params }: { params: PageProps<"/[lang]/dashboard/events
             <Link href={`/${lang}/dashboard/events/${event.id}/registrations`}>
               <Users />
               {dict.registrations.title}
+            </Link>
+          </Button>
+          <Button variant="outline" size="sm" asChild>
+            <Link href={`/${lang}/dashboard/events/${event.id}/scan`}>
+              <ScanLine />
+              {dict.scan.title}
             </Link>
           </Button>
           <EventStatusBadge status={event.status} dict={t.status} />

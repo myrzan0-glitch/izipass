@@ -9,8 +9,11 @@ import * as schema from "@/lib/db/schema"
 import { createEvent, setEventStatus } from "@/lib/events"
 import { createOrganizer } from "@/lib/organizers"
 import {
+  CheckInError,
   RegistrationError,
   activeCount,
+  checkIn,
+  undoCheckIn,
   attachReceipt,
   cancelRegistration,
   decide,
@@ -137,5 +140,24 @@ describe("registrations", () => {
   it("purges receipts a month after the event", async () => {
     expect(await purgeOldReceipts(db)).toBe(0)
     expect(await purgeOldReceipts(db, new Date(Date.now() + 40 * 86_400_000))).toBe(1)
+  })
+})
+
+describe("check-in", () => {
+  it("checks in confirmed attendees once, rejects the rest", async () => {
+    const rows = await listEventRegistrations(db, event.id)
+    const confirmed = rows.find((r) => r.registration.status === "confirmed")!.registration
+    const first = await checkIn(db, event.id, confirmed.id, owner.id)
+    expect(first.already).toBe(false)
+    expect(first.registration.checkedInBy).toBe(owner.id)
+    const second = await checkIn(db, event.id, confirmed.id, owner.id)
+    expect(second.already).toBe(true)
+    expect(second.registration.checkedInAt?.getTime()).toBe(first.registration.checkedInAt?.getTime())
+
+    const held = rows.find((r) => r.registration.status === "held")!.registration
+    await expect(checkIn(db, event.id, held.id, owner.id)).rejects.toMatchObject({ code: "notConfirmed" })
+    await expect(checkIn(db, "00000000-0000-0000-0000-000000000000", confirmed.id, owner.id)).rejects.toBeInstanceOf(CheckInError)
+
+    expect((await undoCheckIn(db, event.id, confirmed.id))?.checkedInAt).toBeNull()
   })
 })
