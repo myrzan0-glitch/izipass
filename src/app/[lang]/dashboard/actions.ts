@@ -178,6 +178,8 @@ export async function saveEventAction(_prev: ActionState, form: FormData): Promi
   const lang = langOf(form)
   const userId = await currentUserId()
 
+  // "Paid" was picked but no price typed: ask for it instead of making the event free.
+  if (str(form, "paid") === "1" && !(num(form, "priceUzs") > 0)) return { errors: { priceUzs: "priceRequired" }, values: values(form) }
   const parsed = parseEvent(form)
   if (!parsed.success) return { errors: fieldErrors(parsed.error), values: values(form) }
 

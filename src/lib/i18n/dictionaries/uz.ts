@@ -182,6 +182,7 @@ const uz: Dictionary = {
     cancelledBody: "Agar to‘lagan bo‘lsangiz, pulni qaytarish uchun tashkilotchiga murojaat qiling.",
   },
   errors: {
+    priceRequired: "Chipta narxini kiriting.",
     registration_organizer: "Siz bu tadbirning tashkilotchisisiz, unga ro‘yxatdan o‘ta olmaysiz.",
     startsInPast: "Boshlanish vaqti kelajakda bo‘lishi kerak.",
     capacityBelowTaken: "{n} ta joy band. Kamida {n} ta kiriting.",
@@ -561,6 +562,8 @@ const uz: Dictionary = {
     deleteButton: "O‘chirish",
   },
   create: {
+    free: "Bepul",
+    paid: "Pullik",
     title: "Tadbir yaratish",
     cover: "Muqova",
     addCover: "Muqova qo‘shish",

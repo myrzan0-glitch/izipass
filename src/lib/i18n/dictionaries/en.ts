@@ -180,6 +180,7 @@ const en = {
     cancelledBody: "If you paid, contact the organizer for a refund.",
   },
   errors: {
+    priceRequired: "Enter the ticket price.",
     registration_organizer: "You run this event, so you can't register for it.",
     startsInPast: "The start must be in the future.",
     capacityBelowTaken: "{n} spots are already taken; set at least {n}.",
@@ -559,6 +560,8 @@ const en = {
     deleteButton: "Delete",
   },
   create: {
+    free: "Free",
+    paid: "Paid",
     title: "Create event",
     cover: "Cover",
     addCover: "Add cover",

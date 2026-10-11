@@ -182,6 +182,7 @@ const kk: Dictionary = {
     cancelledBody: "Төлеген болсаңыз, ақшаны қайтару үшін ұйымдастырушыға хабарласыңыз.",
   },
   errors: {
+    priceRequired: "Билет бағасын енгізіңіз.",
     registration_organizer: "Сіз бұл іс-шараның ұйымдастырушысысыз, оған тіркеле алмайсыз.",
     startsInPast: "Басталу уақыты болашақта болуы керек.",
     capacityBelowTaken: "{n} орын бос емес. Кемінде {n} көрсетіңіз.",
@@ -561,6 +562,8 @@ const kk: Dictionary = {
     deleteButton: "Жою",
   },
   create: {
+    free: "Тегін",
+    paid: "Ақылы",
     title: "Іс-шара құру",
     cover: "Мұқаба",
     addCover: "Мұқаба қосу",

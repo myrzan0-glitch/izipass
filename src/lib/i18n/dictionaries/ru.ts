@@ -182,6 +182,7 @@ const ru: Dictionary = {
     cancelledBody: "Если вы оплатили, свяжитесь с организатором для возврата.",
   },
   errors: {
+    priceRequired: "Укажите цену билета.",
     registration_organizer: "Вы организатор этого мероприятия и не можете на него записаться.",
     startsInPast: "Начало должно быть в будущем.",
     capacityBelowTaken: "Уже занято мест: {n}. Укажите не меньше {n}.",
@@ -561,6 +562,8 @@ const ru: Dictionary = {
     deleteButton: "Удалить",
   },
   create: {
+    free: "Бесплатно",
+    paid: "Платно",
     title: "Создать событие",
     cover: "Обложка",
     addCover: "Добавить обложку",

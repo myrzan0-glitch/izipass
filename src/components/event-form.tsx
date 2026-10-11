@@ -12,6 +12,7 @@ import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/c
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import type { ActionState } from "@/app/[lang]/dashboard/actions"
 import type { Event } from "@/lib/db/schema"
@@ -95,8 +96,11 @@ export function EventForm({ lang, event, section, organizers, defaultOrganizerId
   const [slug, setSlug] = useState(v("slug", event?.slug ?? ""))
   const [slugTouched, setSlugTouched] = useState(!!event)
   const [slugOpen, setSlugOpen] = useState(!!err("slug"))
-  const [price, setPrice] = useState(groupDigits(v("priceUzs", String(event?.priceUzs ?? 0))))
-  const priceValue = Number(price.replace(/\D/g, "") || 0)
+  const startPrice = Number(v("priceUzs", String(event?.priceUzs ?? 0)).replace(/\D/g, "") || 0)
+  // Free or Paid is picked first; Paid shows the price and where to pay.
+  const [paid, setPaid] = useState(startPrice > 0 || v("paid") === "1")
+  const [price, setPrice] = useState(startPrice > 0 ? groupDigits(String(startPrice)) : "")
+  const priceValue = paid ? 1 : 0
 
   const showDetails = section !== "registration"
   const showOptions = section !== "details"
@@ -143,24 +147,38 @@ export function EventForm({ lang, event, section, organizers, defaultOrganizerId
   )
   const priceField = (
     <Field data-invalid={!!err("priceUzs")}>
-      <div className="relative">
-        <Input
-          id="priceUzs"
-          name="priceUzs"
-          type="text"
-          inputMode="numeric"
-          autoComplete="off"
-          value={price}
-          onChange={(e) => setPrice(groupDigits(e.target.value))}
-          // Typing replaces the starting "0" instead of appending to it.
-          onFocus={(e) => e.currentTarget.select()}
-          aria-invalid={!!err("priceUzs")}
-          className="pr-14"
-          required
-        />
-        <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-muted-foreground">{dict.public.uzs}</span>
-      </div>
-      {err("priceUzs") ? <FieldError>{err("priceUzs")}</FieldError> : <FieldDescription>{t.priceHint}</FieldDescription>}
+      <Tabs value={paid ? "paid" : "free"} onValueChange={(value) => setPaid(value === "paid")}>
+        <TabsList className="w-full sm:w-60">
+          <TabsTrigger value="free">{c.free}</TabsTrigger>
+          <TabsTrigger value="paid">{c.paid}</TabsTrigger>
+        </TabsList>
+      </Tabs>
+      {paid ? (
+        <>
+          {hidden("paid", "1")}
+          <div className="relative">
+            <Input
+              id="priceUzs"
+              name="priceUzs"
+              type="text"
+              inputMode="numeric"
+              autoComplete="off"
+              placeholder="50 000"
+              value={price}
+              onChange={(e) => setPrice(groupDigits(e.target.value))}
+              aria-invalid={!!err("priceUzs")}
+              aria-label={c.ticketPrice}
+              className="pr-14"
+              autoFocus={startPrice === 0}
+              required
+            />
+            <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-muted-foreground">{dict.public.uzs}</span>
+          </div>
+        </>
+      ) : (
+        hidden("priceUzs", "0")
+      )}
+      {err("priceUzs") && <FieldError>{err("priceUzs")}</FieldError>}
     </Field>
   )
   // A new event starts with the organization's last payment details; switching organization swaps them.
