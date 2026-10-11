@@ -1,5 +1,3 @@
-import { createHmac } from "node:crypto"
-
 /**
  * Minimal Telegram Bot API client. Calls are injected as a function so the
  * notification logic can be tested without the network.
@@ -48,10 +46,4 @@ export function telegramApiFromEnv(): TelegramApi | null {
   return token ? createTelegramApi(token) : null
 }
 
-/**
- * Secret Telegram sends back in `X-Telegram-Bot-Api-Secret-Token` on every
- * webhook call. Derived from the bot token, so there is no extra env var.
- */
-export function webhookSecret(token: string) {
-  return createHmac("sha256", token).update("izipass:telegram-webhook").digest("base64url")
-}
+export { webhookSecret } from "../../../scripts/telegram-secret.mjs"

@@ -1,13 +1,7 @@
 // Points the Telegram bot at this deployment: webhook + command list.
 // Runs during `npm run build`, only for Vercel production deploys (preview
 // builds must not steal the webhook). Never fails the build.
-import { createHmac } from "node:crypto"
-import { pathToFileURL } from "node:url"
-
-/** Must match webhookSecret() in src/lib/telegram/api.ts (a test checks this). */
-export function webhookSecret(token) {
-  return createHmac("sha256", token).update("izipass:telegram-webhook").digest("base64url")
-}
+import { webhookSecret } from "./telegram-secret.mjs"
 
 const COMMANDS = {
   uz: "Bot haqida",
@@ -34,6 +28,8 @@ async function main() {
   if (process.env.VERCEL_ENV !== "production") return console.log("telegram: not a production deploy, webhook left as is")
   const url = `${site}/api/telegram/webhook`
   await call(token, "setWebhook", { url, secret_token: webhookSecret(token), allowed_updates: ["message", "callback_query"] })
+  const info = await call(token, "getWebhookInfo", {})
+  if (info.url !== url) throw new Error(`webhook is ${info.url || "empty"} after setting it`)
   await call(token, "setMyCommands", { commands: [{ command: "start", description: COMMANDS.en }] })
   for (const [lang, description] of Object.entries(COMMANDS)) {
     await call(token, "setMyCommands", { commands: [{ command: "start", description }], language_code: lang })
@@ -41,6 +37,4 @@ async function main() {
   console.log(`telegram: webhook set to ${url}`)
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
-  main().catch((error) => console.warn(`telegram: setup failed (${error.message}); the bot won't receive button taps until the next deploy`))
-}
+main().catch((error) => console.warn(`telegram: setup failed (${error.message}); the app retries when it next sends a message`))

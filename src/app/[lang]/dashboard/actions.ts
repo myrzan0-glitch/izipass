@@ -8,6 +8,9 @@ import { PlanLimitError, createEvent, getEvent, setEventStatus, updateEvent } fr
 import { DEFAULT_LOCALE, isLocale } from "@/lib/i18n/config"
 import { SlugTakenError, createOrganizer, getOrganizerForUser, updateOrganizer } from "@/lib/organizers"
 import { RegistrationError, decide } from "@/lib/registrations"
+import { SITE_URL } from "@/lib/site"
+import { telegramApiFromEnv } from "@/lib/telegram/api"
+import { connectWebhook } from "@/lib/telegram/webhook"
 import { fromLocalInput } from "@/lib/time"
 import { eventSchema, fieldErrors, organizerSchema } from "@/lib/validation"
 import { notifyLater } from "@/lib/telegram/notify"
@@ -140,4 +143,20 @@ export async function decideRegistrationAction(form: FormData) {
   }
   notifyLater({ eventId: event.id })
   redirect(`/${lang}/dashboard/events/${eventId}/registrations`)
+}
+
+/** Organizer page: point the bot's webhook at this site again. */
+export async function reconnectTelegramAction(form: FormData) {
+  const lang = langOf(form)
+  const userId = await currentUserId()
+  const organizer = await getOrganizerForUser(db(), userId)
+  const api = telegramApiFromEnv()
+  if (organizer && api) {
+    try {
+      await connectWebhook(api, process.env.TELEGRAM_BOT_TOKEN ?? "", SITE_URL)
+    } catch (error) {
+      console.error("[telegram] reconnect failed", error)
+    }
+  }
+  redirect(`/${lang}/dashboard/organizer`)
 }
