@@ -29,6 +29,7 @@ beforeAll(async () => {
   event = await createEvent(db, a, {
     slug: "e", title: "E", description: "", startsAt: new Date(Date.now() + 86_400_000), endsAt: null,
     venue: "", venueUrl: "", capacity: 10, priceUzs: 0, paymentInstructions: "", holdMinutes: 30,
+    registrationClosesBefore: 0,
   })
 })
 

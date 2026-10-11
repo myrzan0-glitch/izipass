@@ -4,11 +4,11 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { Copy, ExternalLink, ScanLine, Users } from "lucide-react"
 
-import { duplicateEventAction, saveEventAction, setEventStatusAction } from "@/app/[lang]/dashboard/actions"
+import { deleteDraftAction, duplicateEventAction, saveEventAction, setEventStatusAction } from "@/app/[lang]/dashboard/actions"
 import { ConfirmAction } from "@/components/confirm-action"
 import { DashboardShell } from "@/components/dashboard-shell"
 import { EventForm } from "@/components/event-form"
-import { EventStatusBadge } from "@/components/event-status"
+import { EventStatusBadge, displayStatus } from "@/components/event-status"
 import { ImageField } from "@/components/image-field"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -17,9 +17,10 @@ import { PageSkeleton } from "@/components/page-skeleton"
 import { ShareLink } from "@/components/share-link"
 import { requireOrganizer } from "@/lib/auth/current"
 import { db } from "@/lib/db"
-import { getEvent, planLimits } from "@/lib/events"
+import { getEvent, liveRegistrationCount, planLimits } from "@/lib/events"
 import { isLocale } from "@/lib/i18n/config"
 import { getDictionary } from "@/lib/i18n/dictionaries"
+import type { Dictionary } from "@/lib/i18n/dictionaries/en"
 import { fmt } from "@/lib/i18n/format"
 import { SITE_URL } from "@/lib/site"
 
@@ -39,6 +40,15 @@ async function Content({ params, searchParams }: PageProps<"/[lang]/dashboard/ev
   if (!event) notFound()
   const t = dict.event
   const publicUrl = `/${lang}/o/${organizer.slug}/${event.slug}`
+  // People registered (or waiting): the event can't go back to draft or be deleted.
+  const live = await liveRegistrationCount(db(), event.id)
+  const shown = displayStatus(event, new Date())
+  const errorText = (() => {
+    const code = typeof query.error === "string" ? query.error : null
+    if (!code) return null
+    const text = dict.errors[code as keyof Dictionary["errors"]]
+    return text ? fmt(text, { n: typeof query.n === "string" ? query.n : "" }) : null
+  })()
 
   const statusForm = (status: "draft" | "published" | "cancelled", label: string, variant: "default" | "outline" | "destructive") => (
     <form action={setEventStatusAction}>
@@ -79,7 +89,7 @@ async function Content({ params, searchParams }: PageProps<"/[lang]/dashboard/ev
               {t.duplicate}
             </Button>
           </form>
-          <EventStatusBadge status={event.status} dict={t.status} />
+          <EventStatusBadge status={shown} dict={t.status} />
         </>
       }
     >
@@ -89,18 +99,30 @@ async function Content({ params, searchParams }: PageProps<"/[lang]/dashboard/ev
           <AlertDescription>{t.duplicated}</AlertDescription>
         </Alert>
       )}
-      {query.error === "eventsPerMonth" && (
+      {errorText && (
         <Alert variant="destructive">
-          <AlertDescription>{fmt(dict.errors.eventsPerMonth, {})}</AlertDescription>
+          <AlertDescription>{errorText}</AlertDescription>
         </Alert>
       )}
       <Card>
         <CardHeader>
           <CardTitle>{t.publishing}</CardTitle>
-          <CardDescription>{t.publishingHint[event.status]}</CardDescription>
+          <CardDescription>{shown === "ended" ? t.endedHint : t.publishingHint[event.status]}</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap items-center gap-2">
           {event.status === "draft" && statusForm("published", t.publish, "default")}
+          {event.status === "draft" && live === 0 && (
+            <ConfirmAction
+              action={deleteDraftAction}
+              fields={{ lang, eventId: event.id }}
+              trigger={t.deleteDraft}
+              triggerVariant="ghost"
+              title={t.deleteTitle}
+              description={t.deleteBody}
+              confirm={t.deleteDraft}
+              cancel={dict.confirm.keep}
+            />
+          )}
           {event.status === "published" && (
             <>
               <Button variant="outline" size="sm" asChild>
@@ -109,7 +131,7 @@ async function Content({ params, searchParams }: PageProps<"/[lang]/dashboard/ev
                   {t.openPublicPage}
                 </Link>
               </Button>
-              {statusForm("draft", t.unpublish, "outline")}
+              {live === 0 && statusForm("draft", t.unpublish, "outline")}
               <ConfirmAction
                 action={setEventStatusAction}
                 fields={{ lang, eventId: event.id, status: "cancelled" }}
@@ -122,9 +144,9 @@ async function Content({ params, searchParams }: PageProps<"/[lang]/dashboard/ev
               />
             </>
           )}
-          {event.status === "cancelled" && statusForm("draft", t.restore, "outline")}
+          {event.status === "cancelled" && live === 0 && statusForm("draft", t.restore, "outline")}
         </CardContent>
-        {event.status === "published" && (
+        {shown === "published" && (
           <CardContent className="flex flex-col gap-2 border-t pt-6">
             <p className="text-sm font-medium">{dict.share.title}</p>
             <p className="text-sm text-muted-foreground">{dict.share.hint}</p>

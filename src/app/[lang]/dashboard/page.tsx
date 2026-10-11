@@ -5,7 +5,7 @@ import { notFound } from "next/navigation"
 import { ExternalLink, Plus } from "lucide-react"
 
 import { DashboardShell } from "@/components/dashboard-shell"
-import { EventStatusBadge } from "@/components/event-status"
+import { EventStatusBadge, displayStatus } from "@/components/event-status"
 import { RegistrationStatusBadge } from "@/components/registration-status"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -76,7 +76,12 @@ async function Dashboard({ lang, dict }: { lang: Locale; dict: Dictionary }) {
 
   if (!organizer) {
     return (
-      <DashboardShell lang={lang} dict={dict} title={dict.dashboard.title} description={fmt(dict.dashboard.welcome, { name: user.name || user.email || "" })}>
+      <DashboardShell
+        lang={lang}
+        dict={dict}
+        title={dict.dashboard.title}
+        description={fmt(dict.dashboard.welcome, { name: user.name || user.email || "" })}
+      >
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
           <MyTickets lang={lang} dict={dict} mine={mine} now={now} />
           <Card>
@@ -103,6 +108,9 @@ async function Dashboard({ lang, dict }: { lang: Locale; dict: Dictionary }) {
     eventsThisMonth(db(), organizer.id),
     organizer.autoCheck ? autoCheckUsage(db(), organizer.id, startOfMonth()) : Promise.resolve(0),
   ])
+  // Upcoming soonest first; past (started) newest first.
+  const upcoming = events.filter((e) => e.startsAt > now).reverse()
+  const past = events.filter((e) => e.startsAt <= now)
   const counts = await registrationCounts(
     db(),
     events.map((e) => e.id),
@@ -152,72 +160,84 @@ async function Dashboard({ lang, dict }: { lang: Locale; dict: Dictionary }) {
           <CardTitle>{t.events}</CardTitle>
           {events.length === 0 && <CardDescription>{t.noEvents}</CardDescription>}
         </CardHeader>
-        {events.length > 0 && (
-          <CardContent className="flex flex-col gap-3 md:hidden">
-            {events.map((e) => (
-              <div key={e.id} className="flex flex-col gap-3 rounded-lg border p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex min-w-0 flex-col gap-0.5">
-                    <Link href={`/${lang}/dashboard/events/${e.id}`} className="font-medium hover:underline">
-                      {e.title}
-                    </Link>
-                    <p className="text-sm text-muted-foreground">{formatDateTime(e.startsAt, lang)}</p>
-                    <p className="text-sm text-muted-foreground">{e.priceUzs ? `${formatMoney(e.priceUzs, lang)} ${dict.public.uzs}` : dict.event.free}</p>
-                    <div className="text-sm text-muted-foreground">{progress(e)}</div>
-                  </div>
-                  <EventStatusBadge status={e.status} dict={dict.event.status} />
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button variant="outline" size="sm" asChild>
-                    <Link href={`/${lang}/dashboard/events/${e.id}/registrations`}>{dict.registrations.title}</Link>
-                  </Button>
-                  <Button variant="ghost" size="sm" asChild>
-                    <Link href={`/${lang}/dashboard/events/${e.id}`}>{dict.event.editTitle}</Link>
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </CardContent>
-        )}
-        {events.length > 0 && (
-          <CardContent className="hidden px-3 md:block">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{dict.event.title}</TableHead>
-                  <TableHead>{dict.event.startsAt}</TableHead>
-                  <TableHead className="text-right">{dict.event.capacity}</TableHead>
-                  <TableHead className="text-right">{dict.event.price}</TableHead>
-                  <TableHead>{dict.common.status}</TableHead>
-                  <TableHead className="text-right">{dict.registrations.title}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {events.map((e) => (
-                  <TableRow key={e.id}>
-                    <TableCell className="font-medium">
-                      <Link href={`/${lang}/dashboard/events/${e.id}`} className="hover:underline">
-                        {e.title}
-                      </Link>
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap">{formatDateTime(e.startsAt, lang)}</TableCell>
-                    <TableCell className="text-right text-sm">{progress(e)}</TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {e.priceUzs ? formatMoney(e.priceUzs, lang) : <Badge variant="outline">{dict.event.free}</Badge>}
-                    </TableCell>
-                    <TableCell>
-                      <EventStatusBadge status={e.status} dict={dict.event.status} />
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button variant="ghost" size="sm" asChild>
-                        <Link href={`/${lang}/dashboard/events/${e.id}/registrations`}>{dict.dashboard.open}</Link>
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
+        {[
+          { key: "upcoming", label: t.upcoming, list: upcoming },
+          { key: "past", label: t.past, list: past },
+        ].map(({ key, label, list }) =>
+          list.length === 0 ? null : (
+            <div key={key} className="flex flex-col gap-2">
+              <p className="px-6 text-sm font-medium text-muted-foreground">{label}</p>
+              {list.length > 0 && (
+                <CardContent className="flex flex-col gap-3 md:hidden">
+                  {list.map((e) => (
+                    <div key={e.id} className="flex flex-col gap-3 rounded-lg border p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex min-w-0 flex-col gap-0.5">
+                          <Link href={`/${lang}/dashboard/events/${e.id}`} className="font-medium hover:underline">
+                            {e.title}
+                          </Link>
+                          <p className="text-sm text-muted-foreground">{formatDateTime(e.startsAt, lang)}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {e.priceUzs ? `${formatMoney(e.priceUzs, lang)} ${dict.public.uzs}` : dict.event.free}
+                          </p>
+                          <div className="text-sm text-muted-foreground">{progress(e)}</div>
+                        </div>
+                        <EventStatusBadge status={displayStatus(e, now)} dict={dict.event.status} />
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Button variant="outline" size="sm" asChild>
+                          <Link href={`/${lang}/dashboard/events/${e.id}/registrations`}>{dict.registrations.title}</Link>
+                        </Button>
+                        <Button variant="ghost" size="sm" asChild>
+                          <Link href={`/${lang}/dashboard/events/${e.id}`}>{dict.event.editTitle}</Link>
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </CardContent>
+              )}
+              {list.length > 0 && (
+                <CardContent className="hidden px-3 md:block">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>{dict.event.title}</TableHead>
+                        <TableHead>{dict.event.startsAt}</TableHead>
+                        <TableHead className="text-right">{dict.event.capacity}</TableHead>
+                        <TableHead className="text-right">{dict.event.price}</TableHead>
+                        <TableHead>{dict.common.status}</TableHead>
+                        <TableHead className="text-right">{dict.registrations.title}</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {list.map((e) => (
+                        <TableRow key={e.id}>
+                          <TableCell className="font-medium">
+                            <Link href={`/${lang}/dashboard/events/${e.id}`} className="hover:underline">
+                              {e.title}
+                            </Link>
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap">{formatDateTime(e.startsAt, lang)}</TableCell>
+                          <TableCell className="text-right text-sm">{progress(e)}</TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            {e.priceUzs ? formatMoney(e.priceUzs, lang) : <Badge variant="outline">{dict.event.free}</Badge>}
+                          </TableCell>
+                          <TableCell>
+                            <EventStatusBadge status={displayStatus(e, now)} dict={dict.event.status} />
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button variant="ghost" size="sm" asChild>
+                              <Link href={`/${lang}/dashboard/events/${e.id}/registrations`}>{dict.dashboard.open}</Link>
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              )}
+            </div>
+          ),
         )}
       </Card>
       {mine.length > 0 && <MyTickets lang={lang} dict={dict} mine={mine} now={now} />}
@@ -231,9 +251,7 @@ export default async function DashboardPage({ params }: PageProps<"/[lang]/dashb
   const dict = await getDictionary(lang)
 
   return (
-    <Suspense
-      fallback={<PageSkeleton />}
-    >
+    <Suspense fallback={<PageSkeleton />}>
       <Dashboard lang={lang} dict={dict} />
     </Suspense>
   )

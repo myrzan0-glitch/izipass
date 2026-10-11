@@ -105,6 +105,10 @@ export const events = pgTable(
     paymentInstructions: text("payment_instructions").notNull().default(""),
     /** How long a spot is held while the attendee pays. */
     holdMinutes: integer("hold_minutes").notNull().default(30),
+    /** Registration closes this many minutes before the start (0 = at the start). */
+    registrationClosesBefore: integer("registration_closes_before").notNull().default(0),
+    /** First time the event went live; the monthly plan limit counts these. */
+    publishedAt: timestamp("published_at", { withTimezone: true }),
     status: eventStatusEnum("status").notNull().default("draft"),
     createdAt: createdAt(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

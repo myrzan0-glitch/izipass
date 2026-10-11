@@ -52,6 +52,7 @@ beforeAll(async () => {
     priceUzs: 100_000,
     paymentInstructions: "Click",
     holdMinutes: 30,
+    registrationClosesBefore: 0,
   })
 })
 

@@ -35,7 +35,8 @@ export async function GET(_request: Request, { params }: RouteContext<"/api/even
     token: ticketToken(r.id),
     name: r.name,
     reference: r.referenceCode,
-    status: r.status,
+    // On a cancelled event no ticket is valid; the scanner shows them as not confirmed.
+    status: event.status === "cancelled" ? "cancelled" : r.status,
     checkedInAt: r.checkedInAt?.toISOString() ?? null,
   }))
   return Response.json({ event: { id: event.id, title: event.title, capacity: event.capacity }, tickets }, { headers: { "Cache-Control": "no-store" } })

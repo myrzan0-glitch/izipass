@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { PageSkeleton } from "@/components/page-skeleton"
 import { db } from "@/lib/db"
-import { listPublicEvents } from "@/lib/events"
+import { listPastPublicEvents, listPublicEvents, registrationOpen } from "@/lib/events"
 import { isLocale } from "@/lib/i18n/config"
 import { getDictionary } from "@/lib/i18n/dictionaries"
 import { fmt } from "@/lib/i18n/format"
@@ -40,7 +40,7 @@ async function OrganizerPage({ params }: { params: PageProps<"/[lang]/o/[slug]">
   const dict = await getDictionary(lang)
   const organizer = await getOrganizerBySlug(db(), slug)
   if (!organizer) notFound()
-  const events = await listPublicEvents(db(), organizer.id)
+  const [events, past] = await Promise.all([listPublicEvents(db(), organizer.id), listPastPublicEvents(db(), organizer.id)])
   const counts = await registrationCounts(
     db(),
     events.map((e) => e.id),
@@ -94,7 +94,11 @@ async function OrganizerPage({ params }: { params: PageProps<"/[lang]/o/[slug]">
                       <Badge variant={e.priceUzs ? "secondary" : "outline"}>
                         {e.priceUzs ? `${formatMoney(e.priceUzs, lang)} ${t.uzs}` : dict.event.free}
                       </Badge>
-                      <Badge variant={left > 0 ? "outline" : "destructive"}>{left > 0 ? fmt(t.spotsLeftShort, { n: left }) : t.soldOut}</Badge>
+                      {!registrationOpen(e) ? (
+                        <Badge variant="outline">{t.ended}</Badge>
+                      ) : (
+                        <Badge variant={left > 0 ? "outline" : "destructive"}>{left > 0 ? fmt(t.spotsLeftShort, { n: left }) : t.soldOut}</Badge>
+                      )}
                     </CardContent>
                   </Card>
                 </Link>
@@ -103,6 +107,22 @@ async function OrganizerPage({ params }: { params: PageProps<"/[lang]/o/[slug]">
           </div>
         )}
       </section>
+
+      {past.length > 0 && (
+        <section className="flex flex-col gap-3">
+          <h2 className="text-lg font-semibold">{t.past}</h2>
+          <ul className="flex flex-col divide-y rounded-xl border">
+            {past.map((e) => (
+              <li key={e.id}>
+                <Link href={`/${lang}/o/${organizer.slug}/${e.slug}`} className="flex items-center justify-between gap-4 px-4 py-3 text-sm hover:bg-accent/40">
+                  <span className="min-w-0 truncate font-medium">{e.title}</span>
+                  <span className="shrink-0 text-muted-foreground">{formatDateTime(e.startsAt, lang)}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
     </main>
   )
 }

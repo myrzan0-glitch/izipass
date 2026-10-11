@@ -1,16 +1,16 @@
 import { createHash, randomInt } from "node:crypto"
-import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, lt, ne, or } from "drizzle-orm"
+import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, lt, ne, or, sql } from "drizzle-orm"
 
 import type { Db } from "@/lib/db"
 import { isUuid } from "@/lib/ids"
-import { events, organizers, receipts, registrations, type Event, type Receipt, type Registration, type RegistrationStatus } from "@/lib/db/schema"
+import { events, organizerMembers, organizers, receipts, registrations, type Event, type Receipt, type Registration, type RegistrationStatus } from "@/lib/db/schema"
 import { checkReceipt, parseReceipt } from "@/lib/receipt-check"
 
 /** Statuses that take a spot. */
 export const ACTIVE: RegistrationStatus[] = ["held", "proof_sent", "confirmed"]
 
 export class RegistrationError extends Error {
-  constructor(public readonly code: "closed" | "already" | "notFound" | "badState") {
+  constructor(public readonly code: "closed" | "already" | "notFound" | "badState" | "organizer") {
     super(code)
   }
 }
@@ -21,6 +21,21 @@ export type RegisterInput = { name: string; phone: string; note: string }
 export function referenceCode(organizerSlug: string) {
   const letters = organizerSlug.replace(/[^a-z]/g, "").slice(0, 3).toUpperCase() || "IZI"
   return `${letters}-${randomInt(1000, 10_000)}`
+}
+
+/** Same rule as registrationOpen() in lib/events: published and before the registration deadline. */
+function isOpen(event: Pick<Event, "status" | "startsAt" | "registrationClosesBefore">, now: Date) {
+  return event.status === "published" && now.getTime() < event.startsAt.getTime() - event.registrationClosesBefore * 60_000
+}
+
+/** People who run the event (owner or staff) don't take spots at it. */
+async function runsEvent(db: Db, event: Pick<Event, "organizerId">, userId: string) {
+  const [row] = await db
+    .select({ userId: organizerMembers.userId })
+    .from(organizerMembers)
+    .where(and(eq(organizerMembers.organizerId, event.organizerId), eq(organizerMembers.userId, userId)))
+    .limit(1)
+  return !!row
 }
 
 export function holdDeadline(event: Event, now = new Date()) {
@@ -42,7 +57,19 @@ export async function expireHolds(db: Db, eventId?: string, now = new Date()) {
     )
     .returning({ eventId: registrations.eventId })
   for (const id of new Set(expired.map((r) => r.eventId))) await promoteWaitlist(db, id, now)
-  return expired.length
+  // After the registration deadline nobody moves up any more: the waitlist closes.
+  const closed = await db
+    .update(registrations)
+    .set({ status: "expired", updatedAt: now })
+    .where(
+      and(
+        eq(registrations.status, "waitlist"),
+        eventId ? eq(registrations.eventId, eventId) : undefined,
+        sql`${registrations.eventId} in (select ${events.id} from ${events} where ${events.startsAt} - make_interval(mins => ${events.registrationClosesBefore}) <= ${now.toISOString()}::timestamptz)`,
+      ),
+    )
+    .returning({ id: registrations.id })
+  return expired.length + closed.length
 }
 
 export async function activeCount(db: Db, eventId: string) {
@@ -56,7 +83,7 @@ export async function activeCount(db: Db, eventId: string) {
 /** Moves the earliest waitlisted people into held spots while there is room. */
 export async function promoteWaitlist(db: Db, eventId: string, now = new Date()) {
   const [event] = await db.select().from(events).where(eq(events.id, eventId)).limit(1)
-  if (!event || event.status !== "published") return []
+  if (!event || !isOpen(event, now)) return []
   const free = event.capacity - (await activeCount(db, eventId))
   if (free <= 0) return []
   const waiting = await db
@@ -79,7 +106,8 @@ export async function promoteWaitlist(db: Db, eventId: string, now = new Date())
 }
 
 export async function register(db: Db, event: Event, organizerSlug: string, userId: string, input: RegisterInput, now = new Date()) {
-  if (event.status !== "published" || event.startsAt < now) throw new RegistrationError("closed")
+  if (!isOpen(event, now)) throw new RegistrationError("closed")
+  if (await runsEvent(db, event, userId)) throw new RegistrationError("organizer")
   await expireHolds(db, event.id, now)
 
   const [existing] = await db
@@ -197,8 +225,15 @@ export function countByStatus(rows: { registration: Registration }[]) {
  * registers again instead (their spot may have gone to the waitlist).
  */
 export async function attachReceipt(db: Db, registrationId: string, contentType: string, data: Buffer, now = new Date()) {
-  const [reg] = await db.select().from(registrations).where(eq(registrations.id, registrationId)).limit(1)
-  if (!reg) throw new RegistrationError("notFound")
+  const [row] = await db
+    .select({ reg: registrations, eventStatus: events.status })
+    .from(registrations)
+    .innerJoin(events, eq(events.id, registrations.eventId))
+    .where(eq(registrations.id, registrationId))
+    .limit(1)
+  if (!row) throw new RegistrationError("notFound")
+  const reg = row.reg
+  if (row.eventStatus !== "published") throw new RegistrationError("closed")
   if (reg.status !== "held" && reg.status !== "proof_sent") throw new RegistrationError("badState")
   if (reg.status === "held" && reg.holdExpiresAt && reg.holdExpiresAt < now) throw new RegistrationError("badState")
   const sha256 = createHash("sha256").update(data).digest("hex")
@@ -371,7 +406,7 @@ export async function purgeOldReceipts(db: Db, now = new Date()) {
 }
 
 export class CheckInError extends Error {
-  constructor(public readonly code: "notFound" | "notConfirmed") {
+  constructor(public readonly code: "notFound" | "notConfirmed" | "cancelled") {
     super(code)
   }
 }
@@ -387,6 +422,8 @@ export async function checkIn(db: Db, eventId: string, registrationId: string, b
     .where(and(eq(registrations.id, registrationId), eq(registrations.eventId, eventId)))
     .limit(1)
   if (!reg) throw new CheckInError("notFound")
+  const [event] = await db.select({ status: events.status }).from(events).where(eq(events.id, eventId)).limit(1)
+  if (event?.status === "cancelled") throw new CheckInError("cancelled")
   if (reg.status !== "confirmed") throw new CheckInError("notConfirmed")
   if (reg.checkedInAt) return { registration: reg, already: true as const }
   const [updated] = await db

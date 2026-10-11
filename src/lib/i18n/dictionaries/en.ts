@@ -39,6 +39,7 @@ const en = {
     },
   },
   dashboard: {
+    upcoming: "Upcoming",
     organizeTitle: "Organize events?",
     organizeBody: "Create a page for your club and start taking registrations. Free for 2 events a month.",
     organizeCta: "Create organizer page",
@@ -94,6 +95,13 @@ const en = {
     payoutNameHint: "As payment apps show it, e.g. AZIZA K. Optional.",
   },
   event: {
+    closesBefore: "Registration closes",
+    closesOptions: { "0": "At the start", "60": "1 hour before", "180": "3 hours before", "720": "12 hours before", "1440": "1 day before", "2880": "2 days before" },
+    closesHint: "After this the event page says Registration closed, and the waitlist closes.",
+    deleteDraft: "Delete draft",
+    deleteTitle: "Delete this draft?",
+    deleteBody: "It's gone for good. Only drafts nobody is registered for can be deleted.",
+    endedHint: "This event has ended.",
     cover: "Cover image",
     coverHint: "A wide picture (16:9). Shown on the event page and when the link is shared in Telegram.",
     duplicate: "Duplicate",
@@ -129,7 +137,7 @@ const en = {
     holdMinutes: "Payment time limit",
     holdMinutesHint: "A spot is held this long while the attendee pays.",
     minutes: "{n} min",
-    status: { draft: "Draft", published: "Published", cancelled: "Cancelled" },
+    status: { draft: "Draft", published: "Published", cancelled: "Cancelled", ended: "Ended" },
     publishing: "Publishing",
     publishingHint: {
       draft: "Only you can see this event. Publish it to share the link.",
@@ -143,6 +151,10 @@ const en = {
     openPublicPage: "Open public page",
   },
   public: {
+    past: "Past events",
+    registrationCloses: "Registration closes {time}",
+    organizerView: "You run this event",
+    manage: "Manage event",
     soldOut: "Sold out",
     spotsLeftShort: "{n} spots left",
     price: "Price",
@@ -165,6 +177,10 @@ const en = {
     cancelledBody: "If you paid, contact the organizer for a refund.",
   },
   errors: {
+    registration_organizer: "You run this event, so you can't register for it.",
+    startsInPast: "The start must be in the future.",
+    capacityBelowTaken: "{n} spots are already taken; set at least {n}.",
+    hasRegistrations: "People are registered, so this event can't go back to draft. Cancel it instead.",
     required: "Required.",
     tooLong: "Too long.",
     tooLarge: "Too large.",
@@ -204,6 +220,8 @@ const en = {
     submit: "Register",
   },
   status: {
+    eventCancelledTitle: "This event is cancelled",
+    eventCancelledBody: "The organizer cancelled it. If you paid, contact them about a refund.",
     timeLeft: "{time} left to pay",
     timeUp: "Payment time is up",
     stepPay: "Pay {amount}",
@@ -282,6 +300,7 @@ const en = {
     notChecked: "Not read yet",
   },
   ticket: {
+    eventCancelled: "Event cancelled",
     title: "Ticket",
     addApple: "Add to Apple Wallet",
     addGoogle: "Add to Google Wallet",
@@ -350,6 +369,9 @@ const en = {
     notLinked: "Your account isn't linked to Telegram, so the bot can't message you. Sign out and sign in with Telegram.",
   },
   bot: {
+    waitlistClosed: "Registration for {event} has closed and no spot opened up. Thanks for waiting.",
+    eventCancelled: "{event} on {date} is cancelled. If you paid, contact the organizer about a refund.",
+    eventChanged: "Update for {event}:",
     start: "Hi! This is the izipass bot.\n\nOrganizers: new payment receipts arrive here with Approve and Reject buttons.\nAttendees: your ticket arrives here once your spot is confirmed.\n\nSign in on the site with this Telegram account to connect it.",
     openSite: "Open izipass",
     newReceipt: "🧾 New receipt · {event}",

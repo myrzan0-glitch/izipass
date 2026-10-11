@@ -34,7 +34,8 @@ async function Content({ params }: { params: PageProps<"/[lang]/t/[token]">["par
   if (!row) notFound()
   const { registration: reg, event, organizer } = row
   const t = dict.ticket
-  const state = reg.checkedInAt ? "checkedIn" : reg.status === "confirmed" ? "valid" : "invalid"
+  const cancelled = event.status === "cancelled"
+  const state = cancelled ? "invalid" : reg.checkedInAt ? "checkedIn" : reg.status === "confirmed" ? "valid" : "invalid"
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-8 px-4 py-6 sm:py-12">
@@ -71,7 +72,7 @@ async function Content({ params }: { params: PageProps<"/[lang]/t/[token]">["par
             {state === "invalid" && (
               <Alert variant="destructive">
                 <AlertTitle>{t.invalid}</AlertTitle>
-                <AlertDescription>{dict.registrationStatus[reg.status]}</AlertDescription>
+                <AlertDescription>{cancelled ? t.eventCancelled : dict.registrationStatus[reg.status]}</AlertDescription>
               </Alert>
             )}
             <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1 text-sm">

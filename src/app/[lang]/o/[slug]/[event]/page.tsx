@@ -17,7 +17,8 @@ import { getSession } from "@/lib/auth/session"
 import { calendarEventFor, googleCalendarUrl } from "@/lib/calendar"
 import { db } from "@/lib/db"
 import { registrations } from "@/lib/db/schema"
-import { getPublicEvent } from "@/lib/events"
+import { getPublicEvent, registrationClosesAt, registrationOpen } from "@/lib/events"
+import { isMember } from "@/lib/organizers"
 import { activeCount, expireHolds } from "@/lib/registrations"
 import { isLocale } from "@/lib/i18n/config"
 import { getDictionary } from "@/lib/i18n/dictionaries"
@@ -53,7 +54,7 @@ async function EventPage({ params }: { params: PageProps<"/[lang]/o/[slug]/[even
   await expireHolds(db(), event.id)
   notifyLater({ eventId: event.id })
   const left = Math.max(0, event.capacity - (await activeCount(db(), event.id)))
-  const open = event.status === "published" && event.startsAt > new Date()
+  const open = registrationOpen(event)
   // Someone already registered sees their place instead of a Register button.
   const session = await getSession()
   const [mine] = session
@@ -64,6 +65,8 @@ async function EventPage({ params }: { params: PageProps<"/[lang]/o/[slug]/[even
         .limit(1)
     : []
   const registered = mine && !["expired", "cancelled", "rejected"].includes(mine.status) ? mine : null
+  // The organizer (or staff) sees a way to manage the event instead of Register.
+  const runsIt = session ? !!(await isMember(db(), organizer.id, session.userId)) : false
   const registerHref = `/${lang}/o/${organizer.slug}/${event.slug}/register`
   const price = event.priceUzs ? `${formatMoney(event.priceUzs, lang)} ${t.uzs}` : dict.event.free
   const calendar = calendarEventFor(event, organizer, lang, SITE_URL)
@@ -76,7 +79,7 @@ async function EventPage({ params }: { params: PageProps<"/[lang]/o/[slug]/[even
   )
 
   return (
-    <main className={`mx-auto flex w-full max-w-5xl flex-1 flex-col gap-10 px-4 py-6 sm:py-12 ${open && !registered ? "pb-28 lg:pb-12" : ""}`}>
+    <main className={`mx-auto flex w-full max-w-5xl flex-1 flex-col gap-10 px-4 py-6 sm:py-12 ${open && !registered && !runsIt ? "pb-28 lg:pb-12" : ""}`}>
       <SiteHeader lang={lang} dict={dict} />
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
       <article className="flex flex-col gap-6">
@@ -132,6 +135,9 @@ async function EventPage({ params }: { params: PageProps<"/[lang]/o/[slug]/[even
             <div>
               <dt className="sr-only">{dict.event.capacity}</dt>
               <dd>{left > 0 ? fmt(t.spotsLeft, { n: left, total: event.capacity }) : t.full}</dd>
+              {open && event.registrationClosesBefore > 0 && (
+                <dd className="text-muted-foreground">{fmt(t.registrationCloses, { time: formatDateTime(registrationClosesAt(event), lang) })}</dd>
+              )}
             </div>
           </div>
         </dl>
@@ -148,7 +154,17 @@ async function EventPage({ params }: { params: PageProps<"/[lang]/o/[slug]/[even
               <span className="text-sm text-muted-foreground">{t.price}</span>
               <span className="text-xl font-semibold tabular-nums">{price}</span>
             </div>
-            {registered ? (
+            {runsIt ? (
+              <>
+                <p className="flex items-center gap-2 font-medium">
+                  <CircleCheck className="size-4" aria-hidden />
+                  {t.organizerView}
+                </p>
+                <Button size="lg" asChild>
+                  <Link href={`/${lang}/dashboard/events/${event.id}`}>{t.manage}</Link>
+                </Button>
+              </>
+            ) : registered ? (
               <>
                 <div className="flex items-center justify-between gap-3">
                   <span className="flex items-center gap-2 font-medium">
@@ -177,7 +193,7 @@ async function EventPage({ params }: { params: PageProps<"/[lang]/o/[slug]/[even
         </Card>
       </aside>
       </div>
-      {open && !registered && (
+      {open && !registered && !runsIt && (
         /* Phones: price and Register stay in reach while reading. */
         <div className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80 lg:hidden">
           <div className="mx-auto flex max-w-5xl items-center justify-between gap-4">

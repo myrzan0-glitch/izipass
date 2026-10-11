@@ -44,6 +44,7 @@ beforeAll(async () => {
     priceUzs: 50_000,
     paymentInstructions: "card",
     holdMinutes: 30,
+    registrationClosesBefore: 0,
   })
   event = (await setEventStatus(db, organizer.id, event.id, "published"))!
 })

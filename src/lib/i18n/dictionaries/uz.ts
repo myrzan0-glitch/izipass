@@ -41,6 +41,7 @@ const uz: Dictionary = {
     },
   },
   dashboard: {
+    upcoming: "Kelgusi",
     organizeTitle: "Tadbirlar tashkil qilasizmi?",
     organizeBody: "Klubingiz sahifasini yarating va ro‘yxatga olishni boshlang. Oyiga 2 tadbirgacha bepul.",
     organizeCta: "Tashkilotchi sahifasini yaratish",
@@ -96,6 +97,13 @@ const uz: Dictionary = {
     payoutNameHint: "To‘lov ilovalarida ko‘rsatilganidek, masalan AZIZA K. Ixtiyoriy.",
   },
   event: {
+    closesBefore: "Ro‘yxatga olish yopiladi",
+    closesOptions: { "0": "Boshlanishida", "60": "1 soat oldin", "180": "3 soat oldin", "720": "12 soat oldin", "1440": "1 kun oldin", "2880": "2 kun oldin" },
+    closesHint: "Shundan so‘ng sahifada «Ro‘yxatga olish yopildi» chiqadi va kutish ro‘yxati yopiladi.",
+    deleteDraft: "Qoralamani o‘chirish",
+    deleteTitle: "Qoralama o‘chirilsinmi?",
+    deleteBody: "U butunlay o‘chadi. Faqat hech kim ro‘yxatdan o‘tmagan qoralamani o‘chirish mumkin.",
+    endedHint: "Tadbir o‘tib ketdi.",
     cover: "Muqova",
     coverHint: "Keng rasm (16:9). Tadbir sahifasida va Telegram’dagi havola ko‘rinishida chiqadi.",
     duplicate: "Nusxa olish",
@@ -131,7 +139,7 @@ const uz: Dictionary = {
     holdMinutes: "To‘lov uchun vaqt",
     holdMinutesHint: "Ishtirokchi to‘lagunicha o‘rin shuncha vaqt band turadi.",
     minutes: "{n} daqiqa",
-    status: { draft: "Qoralama", published: "E’lon qilingan", cancelled: "Bekor qilingan" },
+    status: { draft: "Qoralama", published: "E’lon qilingan", cancelled: "Bekor qilingan", ended: "O‘tdi" },
     publishing: "E’lon qilish",
     publishingHint: {
       draft: "Tadbirni faqat siz ko‘rasiz. Havolani ulashish uchun e’lon qiling.",
@@ -145,6 +153,10 @@ const uz: Dictionary = {
     openPublicPage: "Sahifani ochish",
   },
   public: {
+    past: "O‘tgan tadbirlar",
+    registrationCloses: "Ro‘yxatga olish {time} da yopiladi",
+    organizerView: "Siz bu tadbirning tashkilotchisisiz",
+    manage: "Tadbirni boshqarish",
     soldOut: "Joy qolmadi",
     spotsLeftShort: "{n} ta joy qoldi",
     price: "Narx",
@@ -167,6 +179,10 @@ const uz: Dictionary = {
     cancelledBody: "Agar to‘lagan bo‘lsangiz, pulni qaytarish uchun tashkilotchiga murojaat qiling.",
   },
   errors: {
+    registration_organizer: "Siz bu tadbirning tashkilotchisisiz, unga ro‘yxatdan o‘ta olmaysiz.",
+    startsInPast: "Boshlanish vaqti kelajakda bo‘lishi kerak.",
+    capacityBelowTaken: "{n} ta joy band. Kamida {n} ta kiriting.",
+    hasRegistrations: "Tadbirga odamlar ro‘yxatdan o‘tgan, uni qoralamaga qaytarib bo‘lmaydi. Uning o‘rniga bekor qiling.",
     required: "Majburiy maydon.",
     tooLong: "Juda uzun.",
     tooLarge: "Juda katta.",
@@ -206,6 +222,8 @@ const uz: Dictionary = {
     submit: "Ro‘yxatdan o‘tish",
   },
   status: {
+    eventCancelledTitle: "Tadbir bekor qilindi",
+    eventCancelledBody: "Tashkilotchi uni bekor qildi. To‘lagan bo‘lsangiz, pulni qaytarish bo‘yicha u bilan bog‘laning.",
     timeLeft: "To‘lov uchun {time} qoldi",
     timeUp: "To‘lov vaqti tugadi",
     stepPay: "{amount} to‘lang",
@@ -284,6 +302,7 @@ const uz: Dictionary = {
     notChecked: "Hali o‘qilmagan",
   },
   ticket: {
+    eventCancelled: "Tadbir bekor qilingan",
     title: "Chipta",
     addApple: "Apple Wallet’ga qo‘shish",
     addGoogle: "Google Wallet’ga qo‘shish",
@@ -352,6 +371,9 @@ const uz: Dictionary = {
     notLinked: "Akkauntingiz Telegram’ga bog‘lanmagan, shuning uchun bot sizga yoza olmaydi. Chiqib, Telegram orqali kiring.",
   },
   bot: {
+    waitlistClosed: "«{event}» uchun ro‘yxatga olish yopildi, joy bo‘shamadi. Kutganingiz uchun rahmat.",
+    eventCancelled: "«{event}» ({date}) bekor qilindi. To‘lagan bo‘lsangiz, pulni qaytarish bo‘yicha tashkilotchi bilan bog‘laning.",
+    eventChanged: "«{event}» tadbirida o‘zgarish:",
     start: "Salom! Bu izipass boti.\n\nTashkilotchilar: yangi cheklar shu yerga «Tasdiqlash» va «Rad etish» tugmalari bilan keladi.\nIshtirokchilar: joyingiz tasdiqlangach, chiptangiz shu yerga keladi.\n\nBotni ulash uchun saytga shu Telegram akkaunti orqali kiring.",
     openSite: "izipass’ni ochish",
     newReceipt: "🧾 Yangi chek · {event}",

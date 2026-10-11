@@ -15,7 +15,7 @@ import type { Dictionary } from "@/lib/i18n/dictionaries/en"
 import { fmt } from "@/lib/i18n/format"
 import { slugify } from "@/lib/slug"
 import { toLocalInput } from "@/lib/time"
-import { HOLD_MINUTES } from "@/lib/validation"
+import { CLOSES_BEFORE_MINUTES, HOLD_MINUTES } from "@/lib/validation"
 
 type Props = {
   lang: Locale
@@ -36,10 +36,11 @@ export function EventForm({ lang, event, organizerSlug, maxCapacity, action, dic
   const [state, formAction, pending] = useActionState(action, null)
   const v = (key: string, fallback = "") => state?.values?.[key] ?? fallback
   const err = (key: string) => {
-    const code = state?.errors?.[key]
-    if (!code) return undefined
+    const raw = state?.errors?.[key]
+    if (!raw) return undefined
+    const [code, n] = raw.split(":")
     const text = dict.errors[code as keyof Dictionary["errors"]] ?? dict.errors.generic
-    return code === "participantsPerEvent" ? fmt(text, { n: maxCapacity }) : text
+    return fmt(text, { n: code === "participantsPerEvent" ? maxCapacity : (n ?? "") })
   }
   const t = dict.event
 
@@ -264,6 +265,24 @@ export function EventForm({ lang, event, organizerSlug, maxCapacity, action, dic
               </>
             )}
             {priceValue <= 0 && <input type="hidden" name="holdMinutes" value={String(event?.holdMinutes ?? 30)} />}
+
+            <Field data-invalid={!!err("registrationClosesBefore")}>
+              <FieldLabel htmlFor="registrationClosesBefore">{t.closesBefore}</FieldLabel>
+              <Select name="registrationClosesBefore" defaultValue={v("registrationClosesBefore", String(event?.registrationClosesBefore ?? 0))}>
+                <SelectTrigger id="registrationClosesBefore" className="w-full sm:w-60">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {CLOSES_BEFORE_MINUTES.map((m) => (
+                    <SelectItem key={m} value={String(m)}>
+                      {t.closesOptions[String(m) as keyof typeof t.closesOptions]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FieldDescription>{t.closesHint}</FieldDescription>
+              {err("registrationClosesBefore") && <FieldError>{err("registrationClosesBefore")}</FieldError>}
+            </Field>
           </FieldGroup>
         </FieldSet>
 

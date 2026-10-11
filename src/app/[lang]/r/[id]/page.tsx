@@ -55,7 +55,9 @@ async function Content({ params, searchParams }: Props) {
   const t = dict.status
   const paid = event.priceUzs > 0
   const eventUrl = `/${lang}/o/${organizer.slug}/${event.slug}`
-  const canCancel = ["held", "proof_sent", "confirmed", "waitlist"].includes(reg.status)
+  // A cancelled event shows that and nothing actionable: no paying, no ticket, no cancelling.
+  const eventCancelled = event.status === "cancelled"
+  const canCancel = !eventCancelled && ["held", "proof_sent", "confirmed", "waitlist"].includes(reg.status)
   const canRegisterAgain = ["expired", "cancelled", "rejected"].includes(reg.status) && event.status === "published"
   const amount = `${formatMoney(event.priceUzs, lang)} ${dict.public.uzs}`
   const details = paymentDetails(event.paymentInstructions)
@@ -89,145 +91,167 @@ async function Content({ params, searchParams }: Props) {
           </div>
         </div>
 
-        {reg.status === "held" && paid && (
-          <Card>
-            <CardHeader>
-              <CardTitle>{t.payTitle}</CardTitle>
-              {reg.holdExpiresAt && (
-                <CardDescription className="flex flex-col items-start gap-2">
-                  <Countdown deadline={reg.holdExpiresAt.toISOString()} label={t.timeLeft} done={t.timeUp} />
-                  {fmt(t.payDeadline, { time: formatDateTime(reg.holdExpiresAt, lang) })}
-                </CardDescription>
-              )}
-            </CardHeader>
-            <CardContent className="flex flex-col gap-5">
-              <ol className="flex flex-col gap-1.5 text-sm">
-                {[fmt(t.stepPay, { amount }), t.stepUpload, t.stepConfirm].map((step, i) => (
-                  <li key={step} className="flex gap-2">
-                    <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium tabular-nums">{i + 1}</span>
-                    <span>{step}</span>
-                  </li>
-                ))}
-              </ol>
-              <Separator />
-              <dl className="flex flex-col gap-3 text-sm">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <dt className="text-muted-foreground">{t.amount}</dt>
-                    <dd className="text-lg font-semibold tabular-nums">{amount}</dd>
-                  </div>
-                  {copy(String(event.priceUzs), t.copy)}
-                </div>
-                {details.cards.map((card) => (
-                  <div key={card} className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <dt className="text-muted-foreground">{t.card}</dt>
-                      <dd className="font-mono font-semibold tabular-nums select-all">{card}</dd>
-                    </div>
-                    {copy(card.replace(/ /g, ""), t.copy)}
-                  </div>
-                ))}
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <dt className="text-muted-foreground">{t.reference}</dt>
-                    <dd className="font-mono font-semibold select-all">{reg.referenceCode}</dd>
-                  </div>
-                  {copy(reg.referenceCode, t.copy)}
-                </div>
-              </dl>
-              <p className="text-xs text-muted-foreground">{t.referenceHint}</p>
-              {details.links.map((link) => (
-                <Button key={link} variant="outline" asChild>
-                  <a href={link} target="_blank" rel="noopener noreferrer">
-                    <ExternalLink />
-                    {t.payLink}
-                  </a>
-                </Button>
-              ))}
-              <Separator />
-              <p className="whitespace-pre-line text-sm">{event.paymentInstructions}</p>
-              <Separator />
-              <ReceiptUpload registrationId={reg.id} ocr={organizer.autoCheck} dict={dict} />
-            </CardContent>
-          </Card>
-        )}
-
-        {reg.status === "proof_sent" && (
+        {eventCancelled ? (
+          <Alert variant="destructive">
+            <AlertTitle>{t.eventCancelledTitle}</AlertTitle>
+            <AlertDescription>{t.eventCancelledBody}</AlertDescription>
+          </Alert>
+        ) : (
           <>
-            <Alert>
-              <AlertTitle>{t.proofSentTitle}</AlertTitle>
-              <AlertDescription>{t.proofSentBody}</AlertDescription>
-            </Alert>
-            {receiptId && (
+            {reg.status === "held" && paid && (
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-base">{t.yourReceipt}</CardTitle>
+                  <CardTitle>{t.payTitle}</CardTitle>
+                  {reg.holdExpiresAt && (
+                    <CardDescription className="flex flex-col items-start gap-2">
+                      <Countdown deadline={reg.holdExpiresAt.toISOString()} label={t.timeLeft} done={t.timeUp} />
+                      {fmt(t.payDeadline, { time: formatDateTime(reg.holdExpiresAt, lang) })}
+                    </CardDescription>
+                  )}
                 </CardHeader>
-                <CardContent className="flex flex-col gap-4">
-                  <a href={`/api/receipts/${receiptId}`} target="_blank" rel="noopener" className="block overflow-hidden rounded-md border bg-muted">
-                    {/* eslint-disable-next-line @next/next/no-img-element -- a private, per-request image */}
-                    <img src={`/api/receipts/${receiptId}`} alt={t.yourReceipt} className="mx-auto max-h-72 w-auto object-contain" />
-                  </a>
-                  <ReceiptUpload registrationId={reg.id} ocr={organizer.autoCheck} dict={dict} label={t.replaceReceipt} variant="outline" />
+                <CardContent className="flex flex-col gap-5">
+                  <ol className="flex flex-col gap-1.5 text-sm">
+                    {[fmt(t.stepPay, { amount }), t.stepUpload, t.stepConfirm].map((step, i) => (
+                      <li key={step} className="flex gap-2">
+                        <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium tabular-nums">
+                          {i + 1}
+                        </span>
+                        <span>{step}</span>
+                      </li>
+                    ))}
+                  </ol>
+                  <Separator />
+                  <dl className="flex flex-col gap-3 text-sm">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <dt className="text-muted-foreground">{t.amount}</dt>
+                        <dd className="text-lg font-semibold tabular-nums">{amount}</dd>
+                      </div>
+                      {copy(String(event.priceUzs), t.copy)}
+                    </div>
+                    {details.cards.map((card) => (
+                      <div key={card} className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <dt className="text-muted-foreground">{t.card}</dt>
+                          <dd className="font-mono font-semibold tabular-nums select-all">{card}</dd>
+                        </div>
+                        {copy(card.replace(/ /g, ""), t.copy)}
+                      </div>
+                    ))}
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <dt className="text-muted-foreground">{t.reference}</dt>
+                        <dd className="font-mono font-semibold select-all">{reg.referenceCode}</dd>
+                      </div>
+                      {copy(reg.referenceCode, t.copy)}
+                    </div>
+                  </dl>
+                  <p className="text-xs text-muted-foreground">{t.referenceHint}</p>
+                  {details.links.map((link) => (
+                    <Button key={link} variant="outline" asChild>
+                      <a href={link} target="_blank" rel="noopener noreferrer">
+                        <ExternalLink />
+                        {t.payLink}
+                      </a>
+                    </Button>
+                  ))}
+                  <Separator />
+                  <p className="whitespace-pre-line text-sm">{event.paymentInstructions}</p>
+                  <Separator />
+                  <ReceiptUpload registrationId={reg.id} ocr={organizer.autoCheck} dict={dict} />
                 </CardContent>
               </Card>
             )}
-          </>
-        )}
 
-        {reg.status === "confirmed" && (
-          <>
-            {walletError && (
-              <Alert variant="destructive">
-                <AlertDescription>
-                  {dict.errors[`wallet_${walletError}` as keyof Dictionary["errors"]] ?? dict.errors.generic}
-                </AlertDescription>
+            {reg.status === "proof_sent" && (
+              <>
+                <Alert>
+                  <AlertTitle>{t.proofSentTitle}</AlertTitle>
+                  <AlertDescription>{t.proofSentBody}</AlertDescription>
+                </Alert>
+                {receiptId && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base">{t.yourReceipt}</CardTitle>
+                    </CardHeader>
+                    <CardContent className="flex flex-col gap-4">
+                      <a
+                        href={`/api/receipts/${receiptId}`}
+                        target="_blank"
+                        rel="noopener"
+                        className="block overflow-hidden rounded-md border bg-muted"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element -- a private, per-request image */}
+                        <img src={`/api/receipts/${receiptId}`} alt={t.yourReceipt} className="mx-auto max-h-72 w-auto object-contain" />
+                      </a>
+                      <ReceiptUpload
+                        registrationId={reg.id}
+                        ocr={organizer.autoCheck}
+                        dict={dict}
+                        label={t.replaceReceipt}
+                        variant="outline"
+                      />
+                    </CardContent>
+                  </Card>
+                )}
+              </>
+            )}
+
+            {reg.status === "confirmed" && (
+              <>
+                {walletError && (
+                  <Alert variant="destructive">
+                    <AlertDescription>
+                      {dict.errors[`wallet_${walletError}` as keyof Dictionary["errors"]] ?? dict.errors.generic}
+                    </AlertDescription>
+                  </Alert>
+                )}
+                <TicketCard
+                  lang={lang}
+                  registrationId={reg.id}
+                  qrValue={ticketUrl(reg.id)}
+                  name={reg.name}
+                  reference={reg.referenceCode}
+                  dict={dict}
+                >
+                  <AddToCalendar
+                    googleUrl={googleCalendarUrl(calendarEventFor(event, organizer, lang, SITE_URL))}
+                    icsUrl={`/api/events/${event.id}/calendar?lang=${lang}`}
+                    dict={dict.public}
+                    size="lg"
+                    className="w-full"
+                  />
+                </TicketCard>
+              </>
+            )}
+
+            {reg.status === "waitlist" && (
+              <Alert>
+                <AlertTitle>{t.waitlistTitle}</AlertTitle>
+                <AlertDescription>{t.waitlistBody}</AlertDescription>
               </Alert>
             )}
-            <TicketCard
-              lang={lang}
-              registrationId={reg.id}
-              qrValue={ticketUrl(reg.id)}
-              name={reg.name}
-              reference={reg.referenceCode}
-              dict={dict}
-            >
-              <AddToCalendar
-                googleUrl={googleCalendarUrl(calendarEventFor(event, organizer, lang, SITE_URL))}
-                icsUrl={`/api/events/${event.id}/calendar?lang=${lang}`}
-                dict={dict.public}
-                size="lg"
-                className="w-full"
-              />
-            </TicketCard>
+
+            {reg.status === "rejected" && (
+              <Alert variant="destructive">
+                <AlertTitle>{t.rejectedTitle}</AlertTitle>
+                <AlertDescription>{reg.rejectReason || t.rejectedBody}</AlertDescription>
+              </Alert>
+            )}
+
+            {reg.status === "expired" && (
+              <Alert>
+                <AlertTitle>{t.expiredTitle}</AlertTitle>
+                <AlertDescription>{t.expiredBody}</AlertDescription>
+              </Alert>
+            )}
+
+            {reg.status === "cancelled" && (
+              <Alert>
+                <AlertTitle>{t.cancelledTitle}</AlertTitle>
+              </Alert>
+            )}
           </>
-        )}
-
-        {reg.status === "waitlist" && (
-          <Alert>
-            <AlertTitle>{t.waitlistTitle}</AlertTitle>
-            <AlertDescription>{t.waitlistBody}</AlertDescription>
-          </Alert>
-        )}
-
-        {reg.status === "rejected" && (
-          <Alert variant="destructive">
-            <AlertTitle>{t.rejectedTitle}</AlertTitle>
-            <AlertDescription>{reg.rejectReason || t.rejectedBody}</AlertDescription>
-          </Alert>
-        )}
-
-        {reg.status === "expired" && (
-          <Alert>
-            <AlertTitle>{t.expiredTitle}</AlertTitle>
-            <AlertDescription>{t.expiredBody}</AlertDescription>
-          </Alert>
-        )}
-
-        {reg.status === "cancelled" && (
-          <Alert>
-            <AlertTitle>{t.cancelledTitle}</AlertTitle>
-          </Alert>
         )}
 
         <div className="flex flex-wrap gap-2">
@@ -243,7 +267,9 @@ async function Content({ params, searchParams }: Props) {
               trigger={t.cancel}
               triggerSize="default"
               title={dict.confirm.cancelRegistrationTitle}
-              description={paid && reg.status !== "waitlist" ? dict.confirm.cancelRegistrationPaidBody : dict.confirm.cancelRegistrationBody}
+              description={
+                paid && reg.status !== "waitlist" ? dict.confirm.cancelRegistrationPaidBody : dict.confirm.cancelRegistrationBody
+              }
               confirm={dict.confirm.cancelRegistrationConfirm}
               cancel={dict.confirm.keep}
             />

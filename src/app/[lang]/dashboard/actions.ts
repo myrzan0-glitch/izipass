@@ -4,7 +4,18 @@ import { redirect } from "next/navigation"
 
 import { getSession } from "@/lib/auth/session"
 import { db } from "@/lib/db"
-import { PlanLimitError, createEvent, duplicateEvent, getEvent, setEventStatus, updateEvent } from "@/lib/events"
+import {
+  EventRuleError,
+  PlanLimitError,
+  checkEventInput,
+  createEvent,
+  deleteDraft,
+  duplicateEvent,
+  getEvent,
+  liveRegistrationCount,
+  setEventStatus,
+  updateEvent,
+} from "@/lib/events"
 import { DEFAULT_LOCALE, isLocale } from "@/lib/i18n/config"
 import { SlugTakenError, createOrganizer, getOrganizerForUser, updateOrganizer, updatePaymentSettings } from "@/lib/organizers"
 import { RegistrationError, decide, nextToReview } from "@/lib/registrations"
@@ -121,6 +132,7 @@ function parseEvent(form: FormData) {
     priceUzs: num(form, "priceUzs"),
     paymentInstructions: str(form, "paymentInstructions"),
     holdMinutes: num(form, "holdMinutes"),
+    registrationClosesBefore: num(form, "registrationClosesBefore") || 0,
   })
 }
 
@@ -134,17 +146,33 @@ export async function saveEventAction(_prev: ActionState, form: FormData): Promi
   if (!parsed.success) return { errors: fieldErrors(parsed.error), values: values(form) }
 
   const eventId = str(form, "eventId")
+  const existing = eventId ? await getEvent(db(), organizer.id, eventId) : null
+  if (eventId && !existing) return { errors: { form: "notFound" }, values: values(form) }
+  let saved
   try {
-    const event = eventId
-      ? await updateEvent(db(), organizer, eventId, parsed.data)
-      : await createEvent(db(), organizer, parsed.data)
-    if (!event) return { errors: { form: "notFound" }, values: values(form) }
-    redirect(`/${lang}/dashboard/events/${event.id}`)
+    await checkEventInput(db(), parsed.data, existing)
+    saved = existing ? await updateEvent(db(), organizer, existing.id, parsed.data) : await createEvent(db(), organizer, parsed.data)
   } catch (error) {
     if (error instanceof SlugTakenError) return { errors: { slug: "slugTaken" }, values: values(form) }
     if (error instanceof PlanLimitError) return { errors: { [error.limit === "participantsPerEvent" ? "capacity" : "form"]: error.limit }, values: values(form) }
+    // "code:n" carries the number for messages like "3 spots are already taken".
+    if (error instanceof EventRuleError)
+      return { errors: { [error.code === "capacityBelowTaken" ? "capacity" : "startsAt"]: `${error.code}:${error.n}` }, values: values(form) }
     throw error
   }
+  if (!saved) return { errors: { form: "notFound" }, values: values(form) }
+  // People already registered hear about a new date, time or place.
+  if (
+    existing &&
+    saved.status === "published" &&
+    (existing.startsAt.getTime() !== saved.startsAt.getTime() ||
+      (existing.endsAt?.getTime() ?? 0) !== (saved.endsAt?.getTime() ?? 0) ||
+      existing.venue !== saved.venue) &&
+    (await liveRegistrationCount(db(), saved.id)) > 0
+  ) {
+    notifyLater({ eventChanged: saved.id })
+  }
+  redirect(`/${lang}/dashboard/events/${saved.id}`)
 }
 
 export async function setEventStatusAction(form: FormData) {
@@ -155,8 +183,31 @@ export async function setEventStatusAction(form: FormData) {
   const status = str(form, "status")
   if (status !== "draft" && status !== "published" && status !== "cancelled") return
   const eventId = str(form, "eventId")
-  await setEventStatus(db(), organizer.id, eventId, status)
-  redirect(`/${lang}/dashboard/events/${eventId}`)
+  let error: string | null = null
+  try {
+    const event = await setEventStatus(db(), organizer.id, eventId, status)
+    if (event && status === "cancelled") notifyLater({ eventCancelled: event.id })
+  } catch (e) {
+    if (e instanceof PlanLimitError) error = e.limit
+    else if (e instanceof EventRuleError) error = `${e.code}&n=${e.n}`
+    else throw e
+  }
+  redirect(`/${lang}/dashboard/events/${eventId}${error ? `?error=${error}` : ""}`)
+}
+
+/** Deletes a draft nobody registered for. */
+export async function deleteDraftAction(form: FormData) {
+  const lang = langOf(form)
+  const userId = await currentUserId()
+  const organizer = await getOrganizerForUser(db(), userId)
+  if (!organizer) redirect(`/${lang}/dashboard`)
+  const eventId = str(form, "eventId")
+  try {
+    if (await deleteDraft(db(), organizer.id, eventId)) redirect(`/${lang}/dashboard`)
+  } catch (e) {
+    if (!(e instanceof EventRuleError)) throw e
+  }
+  redirect(`/${lang}/dashboard/events/${eventId}?error=hasRegistrations`)
 }
 
 /** Organizer approves or rejects a registration of one of their events. */

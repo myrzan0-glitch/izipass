@@ -35,25 +35,24 @@ async function Content({ lang, dict }: { lang: Locale; dict: Dictionary }) {
       title={dict.event.createTitle}
       back={{ href: `/${lang}/dashboard`, label: dict.nav.dashboard }}
     >
-      {atLimit ? (
+      {atLimit && (
         <Alert>
           <AlertTitle>{dict.errors.eventsPerMonth}</AlertTitle>
           <AlertDescription>{fmt(dict.dashboard.usage, { used, limit: limits.eventsPerMonth, plan: dict.plans[limits.plan] })}</AlertDescription>
         </Alert>
-      ) : (
-        <Card className="max-w-2xl">
-          <CardContent>
-            <EventForm
-              lang={lang}
-              event={null}
-              organizerSlug={organizer.slug}
-              maxCapacity={limits.participantsPerEvent}
-              action={saveEventAction}
-              dict={dict}
-            />
-          </CardContent>
-        </Card>
       )}
+      <Card className="max-w-2xl">
+        <CardContent>
+          <EventForm
+            lang={lang}
+            event={null}
+            organizerSlug={organizer.slug}
+            maxCapacity={limits.participantsPerEvent}
+            action={saveEventAction}
+            dict={dict}
+          />
+        </CardContent>
+      </Card>
     </DashboardShell>
   )
 }

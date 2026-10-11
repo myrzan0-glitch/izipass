@@ -9,7 +9,8 @@ import { SiteHeader } from "@/components/site-header"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { requireUser } from "@/lib/auth/current"
 import { db } from "@/lib/db"
-import { getPublicEvent } from "@/lib/events"
+import { getPublicEvent, registrationOpen } from "@/lib/events"
+import { isMember } from "@/lib/organizers"
 import { isLocale } from "@/lib/i18n/config"
 import { getDictionary } from "@/lib/i18n/dictionaries"
 import { listUserRegistrations } from "@/lib/registrations"
@@ -34,7 +35,8 @@ async function Content({ params }: { params: PageProps<"/[lang]/o/[slug]/[event]
     (r) => r.event.id === row.event.id && !["expired", "cancelled", "rejected"].includes(r.registration.status),
   )
   if (mine) redirect(`/${lang}/r/${mine.registration.id}`)
-  if (row.event.status !== "published") redirect(`/${lang}/o/${slug}/${eventSlug}`)
+  // Closed, or the visitor runs this event: back to the event page, which explains why.
+  if (!registrationOpen(row.event) || (await isMember(db(), row.organizer.id, user.id))) redirect(`/${lang}/o/${slug}/${eventSlug}`)
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-10 px-4 py-6 sm:py-12">

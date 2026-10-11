@@ -5,7 +5,7 @@ import { after } from "next/server"
 import { db } from "@/lib/db"
 import { SITE_URL } from "@/lib/site"
 import { telegramApiFromEnv } from "@/lib/telegram/api"
-import { notifyAttendees, notifyReceipt } from "@/lib/telegram/bot"
+import { notifyAttendees, notifyEventCancelled, notifyEventChanged, notifyReceipt } from "@/lib/telegram/bot"
 import { ensureWebhook } from "@/lib/telegram/webhook"
 
 /**
@@ -15,8 +15,16 @@ import { ensureWebhook } from "@/lib/telegram/webhook"
  * - `receiptId`: tell the organizers about this receipt (once).
  * - `eventId`: tell attendees of this event about status changes; `null` = all events.
  * - `delayMs`: wait first (gives in-browser auto-check time to finish).
+ * - `eventCancelled` / `eventChanged`: tell everyone registered for that event.
  */
-export function notifyLater(job: { receiptId?: string; eventId?: string | null; delayMs?: number }) {
+export function notifyLater(job: {
+  receiptId?: string
+  eventId?: string | null
+  delayMs?: number
+  /** The event was cancelled / its date, time or place changed: tell its attendees. */
+  eventCancelled?: string
+  eventChanged?: string
+}) {
   const api = telegramApiFromEnv()
   if (!api) return
   after(async () => {
@@ -29,6 +37,8 @@ export function notifyLater(job: { receiptId?: string; eventId?: string | null; 
         await ensureWebhook(api, process.env.TELEGRAM_BOT_TOKEN ?? "", SITE_URL).catch((error) => console.error("[telegram] webhook check failed", error))
       }
       if (job.receiptId) await notifyReceipt(ctx, job.receiptId)
+      if (job.eventCancelled) await notifyEventCancelled(ctx, job.eventCancelled)
+      if (job.eventChanged) await notifyEventChanged(ctx, job.eventChanged)
       if (job.eventId !== undefined) await notifyAttendees(ctx, job.eventId ?? undefined)
     } catch (error) {
       console.error("[telegram] notify failed", error)

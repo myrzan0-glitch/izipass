@@ -40,6 +40,8 @@ export const paymentSettingsSchema = z.object({
 export type PaymentSettingsInput = z.infer<typeof paymentSettingsSchema>
 
 export const HOLD_MINUTES = [15, 30, 60, 120] as const
+/** "Registration closes": at the start, or 1 h, 3 h, 12 h, 1 day, 2 days before. */
+export const CLOSES_BEFORE_MINUTES = [0, 60, 180, 720, 1440, 2880] as const
 
 export const eventSchema = z
   .object({
@@ -54,6 +56,11 @@ export const eventSchema = z
     priceUzs: z.number().int().min(0, "min0").max(100_000_000, "tooLarge"),
     paymentInstructions: z.string().trim().max(1000, "tooLong").default(""),
     holdMinutes: z.number().int().refine((n) => (HOLD_MINUTES as readonly number[]).includes(n), "invalid"),
+    registrationClosesBefore: z
+      .number()
+      .int()
+      .refine((n) => (CLOSES_BEFORE_MINUTES as readonly number[]).includes(n), "invalid")
+      .default(0),
   })
   .refine((e) => !e.endsAt || e.endsAt > e.startsAt, { message: "endsBeforeStart", path: ["endsAt"] })
   .refine((e) => e.priceUzs === 0 || e.paymentInstructions.length > 0, { message: "paymentRequired", path: ["paymentInstructions"] })

@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm"
+import { and, eq, inArray, isNotNull, isNull, lt, sql } from "drizzle-orm"
 
 import type { Db } from "@/lib/db"
 import { events, organizerMembers, receipts, registrations, users, type Registration, type User } from "@/lib/db/schema"
@@ -9,7 +9,7 @@ import { isMember } from "@/lib/organizers"
 import { RegistrationError, decide, getRegistration } from "@/lib/registrations"
 import type { InlineKeyboard, TelegramApi } from "@/lib/telegram/api"
 import { ticketToken } from "@/lib/tickets"
-import { formatDateTime, formatMoney } from "@/lib/time"
+import { formatDateRange, formatDateTime, formatMoney } from "@/lib/time"
 
 /**
  * The izipass Telegram bot. Everything takes the database, the bot API and
@@ -125,7 +125,7 @@ const TELL: Registration["status"][] = ["confirmed", "rejected", "held", "expire
  */
 export async function notifyAttendees(ctx: Ctx, eventId?: string, limit = 50) {
   const due = await ctx.db
-    .select({ id: registrations.id })
+    .select({ id: registrations.id, previous: registrations.notifiedStatus })
     .from(registrations)
     .where(
       and(
@@ -137,7 +137,7 @@ export async function notifyAttendees(ctx: Ctx, eventId?: string, limit = 50) {
     .limit(limit)
 
   let sent = 0
-  for (const { id } of due) {
+  for (const { id, previous } of due) {
     const [reg] = await ctx.db
       .update(registrations)
       .set({ notifiedStatus: sql`${registrations.status}` })
@@ -148,13 +148,66 @@ export async function notifyAttendees(ctx: Ctx, eventId?: string, limit = 50) {
     if (!person?.telegramId) continue
     const [event] = await ctx.db.select().from(events).where(eq(events.id, reg.eventId)).limit(1)
     if (!event) continue
-    const message = attendeeMessage(ctx, reg, event, userLocale(person))
+    const message = attendeeMessage(ctx, reg, event, userLocale(person), previous)
     if (message && (await safely(ctx.api("sendMessage", { chat_id: person.telegramId, ...message })))) sent++
   }
   return sent
 }
 
-function attendeeMessage(ctx: Ctx, reg: Registration, event: typeof events.$inferSelect, locale: Locale) {
+/** Everyone still holding or waiting for a place at the event, with Telegram. */
+async function liveAttendees(ctx: Ctx, eventId: string) {
+  return ctx.db
+    .select({ registration: registrations, user: users, event: events })
+    .from(registrations)
+    .innerJoin(users, eq(users.id, registrations.userId))
+    .innerJoin(events, eq(events.id, registrations.eventId))
+    .where(
+      and(
+        eq(registrations.eventId, eventId),
+        inArray(registrations.status, ["held", "proof_sent", "confirmed", "waitlist"]),
+        isNotNull(users.telegramId),
+      ),
+    )
+}
+
+/** The organizer cancelled the event: tell everyone who registered. */
+export async function notifyEventCancelled(ctx: Ctx, eventId: string) {
+  let sent = 0
+  for (const { registration: reg, user, event } of await liveAttendees(ctx, eventId)) {
+    const locale = userLocale(user)
+    const t = dictionaryFor(locale).bot
+    const ok = await safely(
+      ctx.api("sendMessage", {
+        chat_id: user.telegramId,
+        text: fmt(t.eventCancelled, { event: event.title, date: formatDateTime(event.startsAt, locale) }),
+        reply_markup: { inline_keyboard: [[{ text: t.openRegistration, url: `${ctx.siteUrl}/${locale}/r/${reg.id}` }]] },
+      }),
+    )
+    if (ok) sent++
+  }
+  return sent
+}
+
+/** The date, time or place changed: tell everyone who registered. */
+export async function notifyEventChanged(ctx: Ctx, eventId: string) {
+  let sent = 0
+  for (const { registration: reg, user, event } of await liveAttendees(ctx, eventId)) {
+    const locale = userLocale(user)
+    const t = dictionaryFor(locale).bot
+    const where = event.venue ? `\n${event.venue}` : ""
+    const ok = await safely(
+      ctx.api("sendMessage", {
+        chat_id: user.telegramId,
+        text: `${fmt(t.eventChanged, { event: event.title })}\n${formatDateRange(event.startsAt, event.endsAt, locale)}${where}`,
+        reply_markup: { inline_keyboard: [[{ text: t.openRegistration, url: `${ctx.siteUrl}/${locale}/r/${reg.id}` }]] },
+      }),
+    )
+    if (ok) sent++
+  }
+  return sent
+}
+
+function attendeeMessage(ctx: Ctx, reg: Registration, event: typeof events.$inferSelect, locale: Locale, previous: Registration["notifiedStatus"]) {
   const t = dictionaryFor(locale).bot
   const registrationUrl = `${ctx.siteUrl}/${locale}/r/${reg.id}`
   const open = (text: string) => ({ inline_keyboard: [[{ text, url: registrationUrl }]] })
@@ -188,7 +241,8 @@ function attendeeMessage(ctx: Ctx, reg: Registration, event: typeof events.$infe
         reply_markup: open(t.openRegistration),
       }
     case "expired":
-      return { text: fmt(t.expired, { event: event.title }), reply_markup: open(t.openRegistration) }
+      // From the waitlist: registration closed before a spot opened. From a hold: the payment time ran out.
+      return { text: fmt(previous === "waitlist" ? t.waitlistClosed : t.expired, { event: event.title }), reply_markup: open(t.openRegistration) }
     default:
       return null
   }
@@ -290,7 +344,7 @@ export async function notifyPendingReceipts(ctx: Ctx, olderThan: Date) {
   const pending = await ctx.db
     .select({ id: receipts.id })
     .from(receipts)
-    .where(and(isNull(receipts.notifiedAt), sql`${receipts.createdAt} < ${olderThan}`))
+    .where(and(isNull(receipts.notifiedAt), lt(receipts.createdAt, olderThan)))
     .limit(100)
   let sent = 0
   for (const { id } of pending) sent += (await notifyReceipt(ctx, id)) ?? 0

@@ -1,8 +1,9 @@
-import { and, asc, count, desc, eq, gte, ne } from "drizzle-orm"
+import { and, asc, count, desc, eq, gt, gte, inArray, lte, ne } from "drizzle-orm"
 
 import type { Db } from "@/lib/db"
 import { isUuid } from "@/lib/ids"
-import { PLAN_LIMITS, events, organizers, type Event, type EventStatus, type Organizer, type Plan } from "@/lib/db/schema"
+import { PLAN_LIMITS, events, organizers, registrations, type Event, type EventStatus, type Organizer, type Plan } from "@/lib/db/schema"
+import { setCover } from "@/lib/images"
 import { SlugTakenError } from "@/lib/organizers"
 import { SLUG_PATTERN } from "@/lib/slug"
 import { startOfMonth, toLocalInput } from "@/lib/time"
@@ -14,16 +15,67 @@ export class PlanLimitError extends Error {
   }
 }
 
+/** A change the event's current registrations don't allow. `n` is a number for the message. */
+export class EventRuleError extends Error {
+  constructor(
+    public readonly code: "startsInPast" | "capacityBelowTaken" | "hasRegistrations",
+    public readonly n = 0,
+  ) {
+    super(code)
+  }
+}
+
+/** Registration closes `registrationClosesBefore` minutes before the start. */
+export function registrationClosesAt(event: Pick<Event, "startsAt" | "registrationClosesBefore">) {
+  return new Date(event.startsAt.getTime() - event.registrationClosesBefore * 60_000)
+}
+
+export function registrationOpen(event: Pick<Event, "status" | "startsAt" | "registrationClosesBefore">, now = new Date()) {
+  return event.status === "published" && now < registrationClosesAt(event)
+}
+
+/** Registrations that still hold a place or wait for one. */
+const LIVE_STATUSES = ["held", "proof_sent", "confirmed", "waitlist"] as const
+
+export async function liveRegistrationCount(db: Db, eventId: string) {
+  const [row] = await db
+    .select({ n: count() })
+    .from(registrations)
+    .where(and(eq(registrations.eventId, eventId), inArray(registrations.status, [...LIVE_STATUSES])))
+  return row?.n ?? 0
+}
+
+async function takenCount(db: Db, eventId: string) {
+  const [row] = await db
+    .select({ n: count() })
+    .from(registrations)
+    .where(and(eq(registrations.eventId, eventId), inArray(registrations.status, ["held", "proof_sent", "confirmed"])))
+  return row?.n ?? 0
+}
+
+/**
+ * Rules for saving an event form: a new or moved start can't be in the past,
+ * and the spots can't drop below the places already taken.
+ */
+export async function checkEventInput(db: Db, input: EventInput, existing: Event | null, now = new Date()) {
+  const moved = !existing || existing.startsAt.getTime() !== input.startsAt.getTime()
+  if (moved && input.startsAt < now) throw new EventRuleError("startsInPast")
+  if (existing) {
+    const taken = await takenCount(db, existing.id)
+    if (input.capacity < taken) throw new EventRuleError("capacityBelowTaken", taken)
+  }
+}
+
 function isUniqueViolation(error: unknown) {
   return (error as { code?: string; cause?: { code?: string } }).code === "23505" || (error as { cause?: { code?: string } }).cause?.code === "23505"
 }
 
-/** Events created this calendar month that count against the plan. */
+/** Events first published this calendar month and still live: these count against the plan. Drafts don't. */
 export async function eventsThisMonth(db: Db, organizerId: string) {
   const [row] = await db
     .select({ n: count() })
     .from(events)
-    .where(and(eq(events.organizerId, organizerId), ne(events.status, "cancelled"), gte(events.createdAt, startOfMonth())))
+    .where(and(eq(events.organizerId, organizerId), eq(events.status, "published"), gte(events.publishedAt, startOfMonth())))
   return row?.n ?? 0
 }
 
@@ -33,9 +85,8 @@ export function planLimits(organizer: Organizer) {
 }
 
 export async function createEvent(db: Db, organizer: Organizer, input: EventInput): Promise<Event> {
-  const limits = planLimits(organizer)
-  if (input.capacity > limits.participantsPerEvent) throw new PlanLimitError("participantsPerEvent")
-  if ((await eventsThisMonth(db, organizer.id)) >= limits.eventsPerMonth) throw new PlanLimitError("eventsPerMonth")
+  // Drafts are free to create; the monthly limit applies when publishing.
+  if (input.capacity > planLimits(organizer).participantsPerEvent) throw new PlanLimitError("participantsPerEvent")
   try {
     const [event] = await db.insert(events).values({ ...input, organizerId: organizer.id }).returning()
     return event
@@ -60,13 +111,45 @@ export async function updateEvent(db: Db, organizer: Organizer, eventId: string,
   }
 }
 
-export async function setEventStatus(db: Db, organizerId: string, eventId: string, status: EventStatus) {
-  const [event] = await db
+/**
+ * Publish, unpublish or cancel.
+ * - Publishing for the first time counts against the monthly plan limit, and needs a future start.
+ * - Back to draft only while nobody is registered (their pages would lose the event); cancel instead.
+ */
+export async function setEventStatus(db: Db, organizerId: string, eventId: string, status: EventStatus, now = new Date()) {
+  const event = await getEvent(db, organizerId, eventId)
+  if (!event) return null
+  if (event.status === status) return event
+  const patch: Partial<Event> = { status, updatedAt: now }
+  if (status === "published") {
+    if (event.startsAt < now) throw new EventRuleError("startsInPast")
+    if (!event.publishedAt) {
+      const [organizer] = await db.select().from(organizers).where(eq(organizers.id, organizerId)).limit(1)
+      if ((await eventsThisMonth(db, organizerId)) >= planLimits(organizer).eventsPerMonth) throw new PlanLimitError("eventsPerMonth")
+      patch.publishedAt = now
+    }
+  }
+  if (status === "draft") {
+    const live = await liveRegistrationCount(db, eventId)
+    if (live > 0) throw new EventRuleError("hasRegistrations", live)
+  }
+  const [updated] = await db
     .update(events)
-    .set({ status, updatedAt: new Date() })
+    .set(patch)
     .where(and(eq(events.id, eventId), eq(events.organizerId, organizerId)))
     .returning()
-  return event ?? null
+  return updated ?? null
+}
+
+/** Drafts with nobody holding or waiting for a place can be deleted (with their cover). */
+export async function deleteDraft(db: Db, organizerId: string, eventId: string) {
+  const event = await getEvent(db, organizerId, eventId)
+  if (!event || event.status !== "draft") return false
+  const live = await liveRegistrationCount(db, eventId)
+  if (live > 0) throw new EventRuleError("hasRegistrations", live)
+  if (event.coverUrl) await setCover(db, organizerId, eventId, null)
+  await db.delete(events).where(and(eq(events.id, eventId), eq(events.organizerId, organizerId)))
+  return true
 }
 
 export async function listEvents(db: Db, organizerId: string) {
@@ -83,14 +166,23 @@ export async function getEvent(db: Db, organizerId: string, eventId: string) {
   return event ?? null
 }
 
-/** Published, not yet finished events for a public organizer page. */
+/** Published events that haven't started, soonest first (registration may already be closed). */
 export async function listPublicEvents(db: Db, organizerId: string, now = new Date()) {
-  const dayAgo = new Date(now.getTime() - 24 * 3_600_000)
   return db
     .select()
     .from(events)
-    .where(and(eq(events.organizerId, organizerId), eq(events.status, "published"), gte(events.startsAt, dayAgo)))
+    .where(and(eq(events.organizerId, organizerId), eq(events.status, "published"), gt(events.startsAt, now)))
     .orderBy(asc(events.startsAt))
+}
+
+/** The organizer's most recent past events, newest first. */
+export async function listPastPublicEvents(db: Db, organizerId: string, now = new Date(), limit = 6) {
+  return db
+    .select()
+    .from(events)
+    .where(and(eq(events.organizerId, organizerId), eq(events.status, "published"), lte(events.startsAt, now)))
+    .orderBy(desc(events.startsAt))
+    .limit(limit)
 }
 
 export async function getPublicEvent(db: Db, organizerSlug: string, eventSlug: string) {
@@ -131,6 +223,7 @@ export async function duplicateEvent(db: Db, organizer: Organizer, eventId: stri
     priceUzs: source.priceUzs,
     paymentInstructions: source.paymentInstructions,
     holdMinutes: source.holdMinutes,
+    registrationClosesBefore: source.registrationClosesBefore,
   }
   for (let n = 1; n <= 20; n++) {
     const slug = [base, date, n > 1 ? String(n) : ""].filter(Boolean).join("-")

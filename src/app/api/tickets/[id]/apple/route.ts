@@ -18,6 +18,8 @@ export async function GET(request: Request, { params }: RouteContext<"/api/ticke
   const row = await getRegistration(db(), id)
   if (!row || row.registration.userId !== session.userId) return new Response(null, { status: 404 })
   if (row.registration.status !== "confirmed") return back("not_confirmed")
+  // The registration page explains a cancelled event; no pass for it.
+  if (row.event.status === "cancelled") return NextResponse.redirect(new URL(`/${lang}/r/${id}`, request.url))
 
   try {
     const pkpass = await applePass(walletTicket(row.registration, row.event, row.organizer, lang))
