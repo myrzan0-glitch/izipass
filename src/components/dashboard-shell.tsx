@@ -16,6 +16,8 @@ type Props = {
   description?: React.ReactNode
   back?: { href: string; label: string }
   actions?: React.ReactNode
+  /** Where the top bar's Create event goes (see AppHeader). */
+  createHref?: string
   /** Content width: narrow forms, the default, or wide tables. */
   width?: "narrow" | "default" | "wide"
   children: React.ReactNode
@@ -24,10 +26,10 @@ type Props = {
 const WIDTH = { narrow: "max-w-2xl", default: "max-w-3xl", wide: "max-w-5xl" }
 
 /** Page frame for the signed-in area: top bar, title row, content. */
-export function DashboardShell({ lang, dict, active = null, title, description, back, actions, width = "default", children }: Props) {
+export function DashboardShell({ lang, dict, active = null, createHref, title, description, back, actions, width = "default", children }: Props) {
   return (
     <>
-      <AppHeader lang={lang} dict={dict} active={active} />
+      <AppHeader lang={lang} dict={dict} active={active} createHref={createHref} />
       <main className={cn("mx-auto flex w-full flex-1 flex-col gap-6 px-4 pt-8 pb-16 sm:px-6 sm:pt-10", WIDTH[width])}>
         {(title || back) && (
           <div className="flex flex-col gap-3">

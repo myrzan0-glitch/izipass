@@ -13,7 +13,7 @@ export type OrgTab = "events" | "settings" | "payments" | "telegram"
 
 /** One organization's pages in the app: its name, links, and the tabs. */
 export function OrgManageShell({ lang, dict, organizer, tab, children }: { lang: Locale; dict: Dictionary; organizer: Organizer; tab: OrgTab; children: React.ReactNode }) {
-  const base = `/${lang}/dashboard/organizations/${organizer.id}`
+  const base = `/${lang}/organizations/${organizer.id}`
   const t = dict.orgs
   const tabs: { key: OrgTab; href: string }[] = [
     { key: "events", href: base },
@@ -22,9 +22,9 @@ export function OrgManageShell({ lang, dict, organizer, tab, children }: { lang:
     { key: "telegram", href: `${base}/telegram` },
   ]
   return (
-    <DashboardShell lang={lang} dict={dict} active="organizations" width="wide">
+    <DashboardShell lang={lang} dict={dict} active="organizations" createHref={`/${lang}/events/new?org=${organizer.id}`} width="wide">
       <div className="flex flex-col gap-4">
-        <Link href={`/${lang}/dashboard/organizations`} className="flex w-fit items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+        <Link href={`/${lang}/organizations`} className="flex w-fit items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
           {t.title}
           <ChevronRight className="size-4" />
         </Link>
@@ -41,7 +41,7 @@ export function OrgManageShell({ lang, dict, organizer, tab, children }: { lang:
             </Link>
           </Button>
           <Button size="sm" asChild>
-            <Link href={`/${lang}/dashboard/events/new?org=${organizer.id}`}>
+            <Link href={`/${lang}/events/new?org=${organizer.id}`}>
               <Plus />
               {dict.app.createEvent}
             </Link>

@@ -28,10 +28,10 @@ describe("users", () => {
   })
 
   it("signs in by email link exactly once", async () => {
-    const { token } = await issueLoginToken(db, "New@Example.com", "/ru/dashboard")
+    const { token } = await issueLoginToken(db, "New@Example.com", "/ru/events")
     const result = await consumeLoginToken(db, token, "ru")
     expect(result?.user.email).toBe("new@example.com")
-    expect(result?.next).toBe("/ru/dashboard")
+    expect(result?.next).toBe("/ru/events")
     expect(await consumeLoginToken(db, token, "ru")).toBeNull()
   })
 

@@ -19,7 +19,7 @@ export type Item =
 
 function HostCard({ lang, dict, event, organizer, counts }: Extract<Item, { kind: "host" }> & { lang: Locale; dict: Dictionary }) {
   const t = dict.app
-  const manage = `/${lang}/dashboard/events/${event.id}`
+  const manage = `/${lang}/events/${event.id}`
   const review = counts?.review ?? 0
   return (
     <>

@@ -2,7 +2,7 @@
 
 import { useActionState } from "react"
 
-import type { ActionState } from "@/app/[lang]/dashboard/actions"
+import type { ActionState } from "@/app/[lang]/actions"
 import { Button } from "@/components/ui/button"
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"

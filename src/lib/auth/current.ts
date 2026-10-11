@@ -9,7 +9,7 @@ import type { Locale } from "@/lib/i18n/config"
 import { getEventForMember, getMemberOrganizer } from "@/lib/organizers"
 
 /** Data access layer for signed-in pages: redirects to login when there is no valid session. */
-export async function requireUser(lang: Locale, next = `/${lang}/dashboard`) {
+export async function requireUser(lang: Locale, next = `/${lang}/events`) {
   const session = await getSession()
   const user = session ? await getUser(db(), session.userId) : null
   if (!user) redirect(`/${lang}/login?next=${encodeURIComponent(next)}`)

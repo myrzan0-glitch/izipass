@@ -4,7 +4,7 @@ import { useId, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Check, X } from "lucide-react"
 
-import { decideRegistrationAction } from "@/app/[lang]/dashboard/actions"
+import { decideRegistrationAction } from "@/app/[lang]/actions"
 import { Button } from "@/components/ui/button"
 import {
   ResponsiveDialog,

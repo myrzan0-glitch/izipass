@@ -35,7 +35,7 @@ export async function POST(request: Request) {
   if (!parsed.success) return Response.json({ error: "invalid_email" }, { status: 400 })
 
   const lang = parsed.data.lang && isLocale(parsed.data.lang) ? parsed.data.lang : DEFAULT_LOCALE
-  const next = safeNext(parsed.data.next, `/${lang}/dashboard`)
+  const next = safeNext(parsed.data.next, `/${lang}/events`)
   const session = parsed.data.link ? await getSession() : null
   const { email, token } = await issueLoginToken(db(), parsed.data.email, next, session?.userId ?? null)
 

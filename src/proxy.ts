@@ -6,7 +6,8 @@ import { NextResponse, type NextRequest } from "next/server"
 import { DEFAULT_LOCALE, LOCALES, isLocale } from "@/lib/i18n/config"
 
 const SESSION_COOKIE = "session"
-const PROTECTED = ["dashboard"]
+// The signed-in app (and old /dashboard links, which redirect into it).
+const PROTECTED = ["events", "organizations", "settings", "dashboard"]
 
 function preferredLocale(request: NextRequest) {
   const cookie = request.cookies.get("locale")?.value

@@ -21,7 +21,7 @@ export function OrganizeCard({ lang, dict }: { lang: Locale; dict: Dictionary })
           <p className="text-sm text-muted-foreground">{t.organizeBody}</p>
           <div className="flex flex-wrap gap-2">
             <Button size="lg" asChild>
-              <Link href={`/${lang}/dashboard/events/new`}>{t.createEvent}</Link>
+              <Link href={`/${lang}/events/new`}>{t.createEvent}</Link>
             </Button>
             <Button size="lg" variant="ghost" asChild>
               <Link href={`/${lang}#how`}>{t.howItWorks}</Link>

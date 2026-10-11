@@ -12,7 +12,7 @@ describe("login tokens", () => {
   })
 
   it("only allows same-site paths as next", () => {
-    expect(safeNext("/ru/dashboard", "/x")).toBe("/ru/dashboard")
+    expect(safeNext("/ru/events", "/x")).toBe("/ru/events")
     expect(safeNext("//evil.com", "/x")).toBe("/x")
     expect(safeNext("https://evil.com", "/x")).toBe("/x")
     expect(safeNext("/a\\evil", "/x")).toBe("/x")

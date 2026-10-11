@@ -13,7 +13,7 @@ import {
   ResponsiveDialogTitle,
   ResponsiveDialogTrigger,
 } from "@/components/responsive-dialog"
-import type { ActionState } from "@/app/[lang]/dashboard/actions"
+import type { ActionState } from "@/app/[lang]/actions"
 import type { Locale } from "@/lib/i18n/config"
 import type { Dictionary } from "@/lib/i18n/dictionaries/en"
 import { cn } from "@/lib/utils"

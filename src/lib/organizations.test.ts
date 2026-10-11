@@ -70,7 +70,7 @@ describe("organizations", () => {
 describe("account", () => {
   it("adds an email to the signed-in account, unless someone else has it", async () => {
     const user = await upsertTelegramUser(db, tg("200", "Dilnoza"), "ru")
-    const { token } = await issueLoginToken(db, "Dilnoza@Example.com", "/ru/dashboard/settings", user.id)
+    const { token } = await issueLoginToken(db, "Dilnoza@Example.com", "/ru/settings", user.id)
     const result = await consumeLoginToken(db, token, "ru")
     expect(result?.user.id).toBe(user.id)
     expect((await getUser(db, user.id))?.email).toBe("dilnoza@example.com")

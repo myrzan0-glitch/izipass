@@ -57,13 +57,13 @@ async function OrganizerPage({ params }: { params: PageProps<"/[lang]/o/[slug]">
           <div className="mx-auto flex w-full max-w-3xl flex-wrap items-center gap-3 px-4 py-2.5 sm:px-6">
             <p className="min-w-0 flex-1 text-sm">{dict.guest.organizerBar}</p>
             <Button size="sm" variant="secondary" asChild>
-              <Link href={`/${lang}/dashboard/events/new?org=${organizer.id}`}>
+              <Link href={`/${lang}/events/new?org=${organizer.id}`}>
                 <Plus />
                 {dict.app.createEvent}
               </Link>
             </Button>
             <Button size="sm" variant="ghost" className="text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground" asChild>
-              <Link href={`/${lang}/dashboard/organizations/${organizer.id}/settings`}>
+              <Link href={`/${lang}/organizations/${organizer.id}/settings`}>
                 <Settings />
                 {dict.orgs.settings}
               </Link>
@@ -121,7 +121,7 @@ async function OrganizerPage({ params }: { params: PageProps<"/[lang]/o/[slug]">
                   </div>
                   {member && (
                     <Button variant="outline" size="sm" asChild>
-                      <Link href={`/${lang}/dashboard/events/${e.id}`}>{dict.app.manage}</Link>
+                      <Link href={`/${lang}/events/${e.id}`}>{dict.app.manage}</Link>
                     </Button>
                   )}
                 </Card>

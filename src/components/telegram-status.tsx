@@ -1,6 +1,6 @@
 import { Send } from "lucide-react"
 
-import { reconnectTelegramAction } from "@/app/[lang]/dashboard/actions"
+import { reconnectTelegramAction } from "@/app/[lang]/actions"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"

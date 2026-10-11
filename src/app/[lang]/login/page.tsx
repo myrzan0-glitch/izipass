@@ -24,7 +24,7 @@ type Query = PageProps<"/[lang]/login">["searchParams"]
 /** Depends on the query string and the session cookie, so it streams in. */
 async function LoginCard({ lang, searchParams, dict }: { lang: Locale; searchParams: Query; dict: Dictionary["login"] }) {
   const query = await searchParams
-  const next = safeNext(typeof query.next === "string" ? query.next : null, `/${lang}/dashboard`)
+  const next = safeNext(typeof query.next === "string" ? query.next : null, `/${lang}/events`)
   if (await getSession()) redirect(next)
 
   return (

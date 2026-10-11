@@ -218,7 +218,7 @@ async function EventPage({ params, searchParams }: Props) {
                       {t.organizerView}
                     </p>
                     <Button size="lg" asChild>
-                      <Link href={`/${lang}/dashboard/events/${event.id}`}>{t.manage}</Link>
+                      <Link href={`/${lang}/events/${event.id}`}>{t.manage}</Link>
                     </Button>
                   </>
                 ) : registered ? (

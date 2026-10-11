@@ -43,7 +43,7 @@ async function safely(promise: Promise<unknown>) {
 
 function receiptKeyboard(ctx: Ctx, locale: Locale, eventId: string, registrationId: string, pending: boolean): InlineKeyboard {
   const t = dictionaryFor(locale).bot
-  const open = [{ text: t.openRegistrations, url: `${ctx.siteUrl}/${locale}/dashboard/events/${eventId}/guests` }]
+  const open = [{ text: t.openRegistrations, url: `${ctx.siteUrl}/${locale}/events/${eventId}/guests` }]
   if (!pending) return { inline_keyboard: [open] }
   return {
     inline_keyboard: [
@@ -270,7 +270,7 @@ export async function handleUpdate(ctx: Ctx, update: TgUpdate, now = new Date())
       ctx.api("sendMessage", {
         chat_id: message.chat.id,
         text: t.start,
-        reply_markup: { inline_keyboard: [[{ text: t.openSite, url: `${ctx.siteUrl}/${locale}/dashboard` }]] },
+        reply_markup: { inline_keyboard: [[{ text: t.openSite, url: `${ctx.siteUrl}/${locale}/events` }]] },
       }),
     )
   }

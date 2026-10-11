@@ -88,7 +88,7 @@ describe("telegram bot", () => {
     expect(call.params.caption).toContain(reg.referenceCode)
     const keyboard = (call.params.reply_markup as { inline_keyboard: { callback_data?: string; url?: string }[][] }).inline_keyboard
     expect(keyboard[0].map((b) => b.callback_data)).toEqual([`a:${reg.id}`, `x:${reg.id}`])
-    expect(keyboard[1][0].url).toBe(`https://izipass.test/en/dashboard/events/${event.id}/guests`)
+    expect(keyboard[1][0].url).toBe(`https://izipass.test/en/events/${event.id}/guests`)
   })
 
   it("approves from the button and sends the attendee their ticket", async () => {

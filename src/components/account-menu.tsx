@@ -50,19 +50,19 @@ export function AccountMenu({ lang, name, detail, dict }: Props) {
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
-          <Link href={`/${lang}/dashboard`}>
+          <Link href={`/${lang}/events`}>
             <Ticket />
             {dict.app.events}
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
-          <Link href={`/${lang}/dashboard/organizations`}>
+          <Link href={`/${lang}/organizations`}>
             <Users />
             {dict.app.organizations}
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
-          <Link href={`/${lang}/dashboard/settings`}>
+          <Link href={`/${lang}/settings`}>
             <Settings />
             {dict.app.settings}
           </Link>

@@ -8,7 +8,7 @@ import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/c
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
 import { Textarea } from "@/components/ui/textarea"
-import type { ActionState } from "@/app/[lang]/dashboard/actions"
+import type { ActionState } from "@/app/[lang]/actions"
 import type { Organizer } from "@/lib/db/schema"
 import type { Locale } from "@/lib/i18n/config"
 import type { Dictionary } from "@/lib/i18n/dictionaries/en"

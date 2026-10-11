@@ -29,7 +29,7 @@ export default async function Home({ params }: PageProps<"/[lang]">) {
           <p className="text-base text-muted-foreground sm:text-lg">{dict.hero.subtitle}</p>
           <div>
             <Button size="lg" asChild>
-              <Link href={`/${lang}/dashboard/organizer/new`}>{dict.hero.cta}</Link>
+              <Link href={`/${lang}/events/organizer/new`}>{dict.hero.cta}</Link>
             </Button>
           </div>
         </section>
@@ -128,7 +128,7 @@ export default async function Home({ params }: PageProps<"/[lang]">) {
           </div>
           <div>
             <Button size="lg" asChild>
-              <Link href={`/${lang}/dashboard/organizer/new`}>{l.startFree}</Link>
+              <Link href={`/${lang}/events/organizer/new`}>{l.startFree}</Link>
             </Button>
           </div>
         </section>

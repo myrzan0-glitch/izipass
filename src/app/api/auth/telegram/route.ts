@@ -36,10 +36,10 @@ export async function POST(request: Request) {
       if (error instanceof AccountLinkError) return Response.json({ error: error.code }, { status: 409 })
       throw error
     }
-    return Response.json({ next: safeNext(parsed.data.next, `/${lang}/dashboard/settings`) })
+    return Response.json({ next: safeNext(parsed.data.next, `/${lang}/settings`) })
   }
   const user = await upsertTelegramUser(db(), auth, lang)
-  const response = Response.json({ next: safeNext(parsed.data.next, `/${lang}/dashboard`) })
+  const response = Response.json({ next: safeNext(parsed.data.next, `/${lang}/events`) })
   const cookie = sessionCookie(await createSessionToken({ userId: user.id }))
   response.headers.append("Set-Cookie", serializeCookie(cookie))
   return response

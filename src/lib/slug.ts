@@ -24,4 +24,4 @@ export function slugify(input: string, maxLength = 48) {
 export const SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]{1,46}[a-z0-9])?$/
 
 /** Paths under /[lang]/ that an organizer slug must not shadow. */
-export const RESERVED_SLUGS = new Set(["login", "dashboard", "o", "e", "t", "api", "admin", "stats", "izipass"])
+export const RESERVED_SLUGS = new Set(["login", "dashboard", "events", "organizations", "settings", "o", "e", "t", "r", "api", "admin", "stats", "izipass"])

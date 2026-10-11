@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation"
 import { z } from "zod"
 
-import type { ActionState } from "@/app/[lang]/dashboard/actions"
+import type { ActionState } from "@/app/[lang]/actions"
 import { getSession } from "@/lib/auth/session"
 import { fillProfile } from "@/lib/auth/users"
 import { db } from "@/lib/db"

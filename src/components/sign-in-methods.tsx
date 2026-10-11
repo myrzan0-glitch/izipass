@@ -39,7 +39,7 @@ export function SignInMethods({ lang, telegram, email, bot, dict }: Props) {
     const res = await fetch("/api/auth/telegram", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ user, lang, link: true, next: `/${lang}/dashboard/settings` }),
+      body: JSON.stringify({ user, lang, link: true, next: `/${lang}/settings` }),
     })
     if (res.status === 409) return toast.error(t.errors.telegramTaken)
     if (!res.ok) return toast.error(dict.login.errors.telegram)
@@ -56,7 +56,7 @@ export function SignInMethods({ lang, telegram, email, bot, dict }: Props) {
       const res = await fetch("/api/auth/email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: address, lang, link: true, next: `/${lang}/dashboard/settings?saved=1` }),
+        body: JSON.stringify({ email: address, lang, link: true, next: `/${lang}/settings?saved=1` }),
       })
       if (!res.ok) throw new Error()
       setSent(address)

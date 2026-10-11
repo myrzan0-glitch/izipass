@@ -17,12 +17,12 @@ export async function GET(request: Request) {
   try {
     result = token ? await consumeLoginToken(db(), token, lang) : null
   } catch (error) {
-    if (error instanceof AccountLinkError) return NextResponse.redirect(new URL(`/${lang}/dashboard/settings?error=${error.code}`, request.url))
+    if (error instanceof AccountLinkError) return NextResponse.redirect(new URL(`/${lang}/settings?error=${error.code}`, request.url))
     throw error
   }
   if (!result) return NextResponse.redirect(new URL(`/${lang}/login?error=expired`, request.url))
 
-  const response = NextResponse.redirect(new URL(safeNext(result.next, `/${lang}/dashboard`), request.url))
+  const response = NextResponse.redirect(new URL(safeNext(result.next, `/${lang}/events`), request.url))
   response.cookies.set(sessionCookie(await createSessionToken({ userId: result.user.id })))
   return response
 }

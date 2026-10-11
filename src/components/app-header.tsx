@@ -39,23 +39,26 @@ export function AppHeader({
   dict,
   active,
   variant = "app",
+  createHref,
 }: {
   lang: Locale
   dict: Dictionary
   active: AppSection
   variant?: "app" | "public"
+  /** Where Create event goes; from My organizations it keeps that section (and the organization). */
+  createHref?: string
 }) {
   const app = variant === "app"
   const t = dict.app
   const links = [
-    { key: "events", href: `/${lang}/dashboard`, label: t.events, icon: Ticket },
-    { key: "organizations", href: `/${lang}/dashboard/organizations`, label: t.organizations, icon: Users },
+    { key: "events", href: `/${lang}/events`, label: t.events, icon: Ticket },
+    { key: "organizations", href: `/${lang}/organizations`, label: t.organizations, icon: Users },
   ] as const
   return (
     <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/80">
       <div className="mx-auto flex h-14 w-full max-w-6xl items-center gap-2 px-4 sm:px-6">
         <Link
-          href={`/${lang}${app ? "/dashboard" : ""}`}
+          href={`/${lang}${app ? "/events" : ""}`}
           className="mr-auto font-mono text-sm font-medium tracking-tight md:mr-0 md:flex-1"
         >
           {SITE_NAME}
@@ -85,7 +88,7 @@ export function AppHeader({
           </div>
           {app && (
             <Button size="sm" className="max-md:size-8 max-md:px-0" aria-label={t.createEvent} asChild>
-              <Link href={`/${lang}/dashboard/events/new`}>
+              <Link href={createHref ?? `/${lang}/events/new${active === "organizations" ? "?from=organizations" : ""}`}>
                 <Plus />
                 <span className="max-md:sr-only">{t.createEvent}</span>
               </Link>

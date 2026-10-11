@@ -25,7 +25,7 @@ type Props = {
 
 /** One event's management pages: organization, title, status and the tabs. */
 export function EventManageShell({ lang, dict, event, organizer, tab, review, children }: Props) {
-  const base = `/${lang}/dashboard/events/${event.id}`
+  const base = `/${lang}/events/${event.id}`
   const t = dict.manage
   const tabs: { key: ManageTab; href: string }[] = [
     { key: "overview", href: base },
@@ -37,7 +37,7 @@ export function EventManageShell({ lang, dict, event, organizer, tab, review, ch
     <DashboardShell lang={lang} dict={dict} active="events" width="wide">
       <div className="flex flex-col gap-4">
         <Link
-          href={`/${lang}/dashboard/organizations/${organizer.id}`}
+          href={`/${lang}/organizations/${organizer.id}`}
           className="flex w-fit items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
         >
           {organizer.name}
