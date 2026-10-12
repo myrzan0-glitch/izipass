@@ -26,7 +26,7 @@ export function toLocalInput(date: Date) {
   return `${get("year")}-${get("month")}-${get("day")}T${get("hour")}:${get("minute")}`
 }
 
-const INTL_LOCALE: Record<Locale, string> = { uz: "uz-Latn-UZ", ru: "ru-RU", kk: "kk-KZ", en: "en-GB" }
+export const INTL_LOCALE: Record<Locale, string> = { uz: "uz-Latn-UZ", ru: "ru-RU", kk: "kk-KZ", en: "en-GB" }
 
 export function formatDateTime(date: Date, locale: Locale) {
   return new Intl.DateTimeFormat(INTL_LOCALE[locale], {

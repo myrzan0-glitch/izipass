@@ -4,6 +4,7 @@ import { useActionState, useState } from "react"
 import { Clock, MapPin } from "lucide-react"
 
 import { CoverPicker } from "@/components/cover-picker"
+import { DateTimeField } from "@/components/date-time-field"
 import { OrgMark } from "@/components/org-mark"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -394,13 +395,15 @@ export function EventForm({ lang, event, section, organizers, defaultOrganizerId
         <Card className="gap-0 py-0">
           <Row label={c.start} htmlFor="startsAt">
             <Field data-invalid={!!err("startsAt")}>
-              <Input
+              <DateTimeField
                 id="startsAt"
                 name="startsAt"
-                type="datetime-local"
+                label={c.start}
+                lang={lang}
                 defaultValue={v("startsAt", event ? toLocalInput(event.startsAt) : "")}
-                aria-invalid={!!err("startsAt")}
-                required
+                defaultTime="19:00"
+                invalid={!!err("startsAt")}
+                dict={c}
               />
               {err("startsAt") && <FieldError>{err("startsAt")}</FieldError>}
             </Field>
@@ -408,12 +411,16 @@ export function EventForm({ lang, event, section, organizers, defaultOrganizerId
           <Separator />
           <Row label={c.end} htmlFor="endsAt">
             <Field data-invalid={!!err("endsAt")}>
-              <Input
+              <DateTimeField
                 id="endsAt"
                 name="endsAt"
-                type="datetime-local"
+                label={c.end}
+                lang={lang}
                 defaultValue={v("endsAt", event?.endsAt ? toLocalInput(event.endsAt) : "")}
-                aria-invalid={!!err("endsAt")}
+                defaultTime="21:00"
+                invalid={!!err("endsAt")}
+                optional
+                dict={c}
               />
               {err("endsAt") && <FieldError>{err("endsAt")}</FieldError>}
             </Field>
