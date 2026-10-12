@@ -68,4 +68,4 @@ A second Vercel project (`izipass-test`) built from the same `main`, so every pu
 2. Storage → its **own** Neon Postgres (never the production database).
 3. Env vars: `TEST_STAND=1`, `NEXT_PUBLIC_SITE_URL=https://test.izipass.myrzan.com`, a new `SESSION_SECRET`, `CRON_SECRET`; optionally the same `WALLET_API_URL` / `WALLET_API_KEY`. Leave out `RESEND_API_KEY` and the Telegram variables: the bot can serve only one site.
 
-On the test stand no email is sent (the sign-in link is shown on screen), the sign-in page has one-click test accounts (organizer and three guests), and the first sign-in seeds the izipass Test Club with events in every state. "Reset test data" puts it back. See `src/lib/test-stand.ts`.
+On the test stand no email is sent. Typing a test account's email (`organizer@izipass.test`, `alina@`, `bobur@`, `dilnoza@izipass.test`) signs straight in; any other email gets its sign-in link on screen. The first sign-in seeds the izipass Test Club with events in every state; Dilnoza starts with no registrations, to walk every stage. "Reset test data" in the yellow strip puts it back. See `src/lib/test-stand.ts`.

@@ -7,8 +7,8 @@ import { TEST_RECEIPT_PNG } from "@/lib/test-stand-receipt"
 
 /**
  * The test stand (test.izipass.myrzan.com) runs the same code as production with TEST_STAND=1:
- * emails are never sent (the sign-in link is shown on screen), and ready-made accounts sign in
- * with one click. Never set TEST_STAND on production; the production domain refuses it anyway.
+ * emails are never sent. Typing a test account's email signs straight in; any other email gets
+ * its sign-in link on screen. Never set TEST_STAND on production; the production domain refuses it anyway.
  */
 export function isTestStand() {
   if (process.env.TEST_STAND !== "1") return false
@@ -27,6 +27,10 @@ export const TEST_ACCOUNTS = [
 ] as const
 
 export type TestAccountKey = (typeof TEST_ACCOUNTS)[number]["key"]
+
+export function testAccountByEmail(email: string) {
+  return TEST_ACCOUNTS.find((a) => a.email === email.trim().toLowerCase())
+}
 
 export const TEST_ORGANIZER_SLUG = "test-club"
 
@@ -114,7 +118,7 @@ export async function seedTestStand(db: Db, { reset = false } = {}) {
         capacity: 20,
         priceUzs: 50_000,
         ...paid,
-        // A day to pay, so the "waiting for payment" registration doesn't expire mid-test.
+        // A day to pay, so a test registration doesn't expire mid-test.
         holdMinutes: 1440,
         status: "published" as const,
         publishedAt: now,
@@ -172,7 +176,8 @@ export async function seedTestStand(db: Db, { reset = false } = {}) {
   const event = Object.fromEntries(seeded.map((e) => [e.slug, e.id]))
 
   let code = 1000
-  const reg = (slug: string, who: TestAccountKey, status: "held" | "proof_sent" | "confirmed", extra: Partial<typeof registrations.$inferInsert> = {}) => {
+  // Dilnoza has no registrations: she walks every stage herself (register, pay, receipt, approval, ticket).
+  const reg = (slug: string, who: Exclude<TestAccountKey, "dilnoza">, status: "proof_sent" | "confirmed", extra: Partial<typeof registrations.$inferInsert> = {}) => {
     const account = TEST_ACCOUNTS.find((a) => a.key === who)!
     code += 1
     return {
@@ -193,7 +198,6 @@ export async function seedTestStand(db: Db, { reset = false } = {}) {
     .values([
       reg("speaking-club", "alina", "confirmed"),
       reg("speaking-club", "bobur", "proof_sent", { referenceCode: "TES-2002" }),
-      reg("speaking-club", "dilnoza", "held", { holdExpiresAt: new Date(Date.now() + DAY) }),
       reg("morning-run", "alina", "confirmed"),
       reg("morning-run", "bobur", "confirmed"),
       reg("clay-workshop", "alina", "confirmed"),

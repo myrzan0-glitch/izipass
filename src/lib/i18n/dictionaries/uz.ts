@@ -679,12 +679,6 @@ const uz: Dictionary = {
   },
   testStand: {
     banner: "Test stend · ma’lumotlar soxta, xatlar yuborilmaydi",
-    accountsTitle: "Test akkauntlari",
-    accountsBody: "Bir bosishda kiring. Akkauntni almashtirish uchun avval chiqing.",
-    organizer: "Tashkilotchi · izipass Test Club",
-    alina: "Mehmon · chiptalari bor",
-    bobur: "Mehmon · chek tasdiqlanishini kutmoqda",
-    dilnoza: "Mehmon · to‘lashi kerak",
     reset: "Test ma’lumotlarini tiklash",
     resetDone: "Test ma’lumotlari boshlang‘ich holatga qaytdi.",
     linkTitle: "Test stend: xat yuborilmadi",

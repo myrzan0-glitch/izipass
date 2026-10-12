@@ -3,7 +3,6 @@ import type { Metadata } from "next"
 import { notFound, redirect } from "next/navigation"
 
 import { LoginForm } from "@/components/login-form"
-import { TestAccounts } from "@/components/test-accounts"
 import { SiteHeader } from "@/components/site-header"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -13,7 +12,7 @@ import { isLocale, type Locale } from "@/lib/i18n/config"
 import { getDictionary } from "@/lib/i18n/dictionaries"
 import type { Dictionary } from "@/lib/i18n/dictionaries/en"
 import { TELEGRAM_BOT } from "@/lib/site"
-import { TEST_ACCOUNTS, isTestStand } from "@/lib/test-stand"
+import { isTestStand } from "@/lib/test-stand"
 
 export async function generateMetadata({ params }: PageProps<"/[lang]/login">): Promise<Metadata> {
   const { lang } = await params
@@ -30,7 +29,7 @@ async function LoginCard({ lang, searchParams, dict }: { lang: Locale; searchPar
   if (await getSession()) redirect(next)
   const testStand = isTestStand() ? (await getDictionary(lang)).testStand : null
 
-  const card = (
+  return (
     <Card className="w-full max-w-sm">
       <CardHeader>
         <CardTitle>{dict.title}</CardTitle>
@@ -47,14 +46,6 @@ async function LoginCard({ lang, searchParams, dict }: { lang: Locale; searchPar
         />
       </CardContent>
     </Card>
-  )
-  return testStand ? (
-    <div className="flex w-full flex-col items-center gap-4">
-      {card}
-      <TestAccounts lang={lang} next={next} accounts={TEST_ACCOUNTS.map(({ key, name }) => ({ key, name }))} dict={testStand} />
-    </div>
-  ) : (
-    card
   )
 }
 

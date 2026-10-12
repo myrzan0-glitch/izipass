@@ -46,7 +46,14 @@ export function LoginForm({ lang, next, bot, initialError, dict, testStand }: Pr
         body: JSON.stringify({ email, lang, next }),
       })
       if (!res.ok) throw new Error()
-      setTestLink(((await res.json()) as { link?: string }).link)
+      const data = (await res.json()) as { link?: string; next?: string }
+      // Test stand: a test account is signed in right away.
+      if (data.next) {
+        router.push(data.next)
+        router.refresh()
+        return
+      }
+      setTestLink(data.link)
       setSent(email)
     } catch {
       setError(dict.errors.generic)

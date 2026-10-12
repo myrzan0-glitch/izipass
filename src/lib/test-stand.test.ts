@@ -39,7 +39,7 @@ describe("test stand", () => {
   it("seeds four accounts and the Test Club once, and resets to the start", async () => {
     await seedTestStand(db)
     const first = await counts()
-    expect(first).toEqual({ users: 4, events: 5, registrations: 9, receipts: 1 })
+    expect(first).toEqual({ users: 4, events: 5, registrations: 8, receipts: 1 })
 
     await seedTestStand(db)
     expect(await counts()).toEqual(first)
@@ -51,6 +51,10 @@ describe("test stand", () => {
     expect(await counts()).toEqual(first)
 
     const statuses = (await db.select({ status: schema.registrations.status }).from(schema.registrations)).map((r) => r.status).sort()
-    expect(statuses).toEqual(["confirmed", "confirmed", "confirmed", "confirmed", "confirmed", "confirmed", "confirmed", "held", "proof_sent"])
+    expect(statuses).toEqual(["confirmed", "confirmed", "confirmed", "confirmed", "confirmed", "confirmed", "confirmed", "proof_sent"])
+
+    // Dilnoza starts with nothing, to walk every stage herself.
+    const [dilnoza] = await db.select().from(schema.users).where(eq(schema.users.email, "dilnoza@izipass.test"))
+    expect(await db.select().from(schema.registrations).where(eq(schema.registrations.userId, dilnoza.id))).toEqual([])
   })
 })

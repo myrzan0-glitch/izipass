@@ -1,5 +1,6 @@
 import { FlaskConical } from "lucide-react"
 
+import { TestStandReset } from "@/components/test-stand-reset"
 import type { Locale } from "@/lib/i18n/config"
 import { getDictionary } from "@/lib/i18n/dictionaries"
 
@@ -10,6 +11,8 @@ export async function TestStandBar({ lang }: { lang: Locale }) {
     <div className="flex items-center justify-center gap-2 bg-chart-4 px-4 py-1.5 text-center text-xs font-medium text-foreground dark:text-background">
       <FlaskConical className="size-3.5 shrink-0" aria-hidden />
       {dict.testStand.banner}
+      <span aria-hidden>·</span>
+      <TestStandReset label={dict.testStand.reset} done={dict.testStand.resetDone} />
     </div>
   )
 }
