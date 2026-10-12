@@ -59,3 +59,13 @@ docs/plan.md                 product plan and decisions
 5. In Resend: verify the sending domain for `EMAIL_FROM`.
 
 The build runs migrations before `next build`.
+
+## Test stand (test.izipass.myrzan.com)
+
+A second Vercel project (`izipass-test`) built from the same `main`, so every push updates both sites.
+
+1. Import the repo again as `izipass-test`; domain `test.izipass.myrzan.com` (CNAME `test` → `cname.vercel-dns.com`).
+2. Storage → its **own** Neon Postgres (never the production database).
+3. Env vars: `TEST_STAND=1`, `NEXT_PUBLIC_SITE_URL=https://test.izipass.myrzan.com`, a new `SESSION_SECRET`, `CRON_SECRET`; optionally the same `WALLET_API_URL` / `WALLET_API_KEY`. Leave out `RESEND_API_KEY` and the Telegram variables: the bot can serve only one site.
+
+On the test stand no email is sent (the sign-in link is shown on screen), the sign-in page has one-click test accounts (organizer and three guests), and the first sign-in seeds the izipass Test Club with events in every state. "Reset test data" puts it back. See `src/lib/test-stand.ts`.
