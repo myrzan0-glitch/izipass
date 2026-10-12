@@ -6,6 +6,8 @@ const nextConfig: NextConfig = {
   partialPrefetching: true,
   // Create event sends the cover with the form (up to 2 MB, see IMAGE_MAX_BYTES).
   experimental: { serverActions: { bodySizeLimit: "3mb" } },
+  // The share image reads its fonts from disk; make sure they ship with the function.
+  outputFileTracingIncludes: { "/api/og/**": ["./assets/fonts/*.otf"] },
   turbopack: {
     rules: {
       "*.css": {
