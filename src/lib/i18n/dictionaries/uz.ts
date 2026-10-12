@@ -2,9 +2,9 @@ import type { Dictionary } from "./en"
 
 const uz: Dictionary = {
   meta: {
-    title: "izipass — Wallet chiptali pullik tadbirlar",
+    title: "izipass — har kimning o‘z tadbiri bo‘lsin",
     description:
-      "Tadbir yarating, ro‘yxatdan o‘tishlarni qabul qiling, to‘lovni tasdiqlang va ishtirokchilarga Apple Wallet yoki Google Wallet’da chipta bering. Kirish — bir skanerlash.",
+      "Klub, yugurish yoki master-klassni bir necha daqiqada boshlang. Mehmonlar ro‘yxatdan o‘tadi, sizga to‘g‘ridan-to‘g‘ri to‘laydi va Apple Wallet yoki Google Walletda chipta oladi. Kirish — bitta skan bilan.",
   },
   language: "Til",
   theme: { toggle: "Mavzuni almashtirish", light: "Yorug‘", dark: "Qorong‘i", system: "Tizim" },

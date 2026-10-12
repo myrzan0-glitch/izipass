@@ -2,9 +2,9 @@ import type { Dictionary } from "./en"
 
 const ru: Dictionary = {
   meta: {
-    title: "izipass — платные мероприятия с билетами в Wallet",
+    title: "izipass — своё событие у каждого",
     description:
-      "Создайте мероприятие, принимайте регистрации, подтверждайте оплату и выдавайте билет в Apple Wallet или Google Wallet. Вход — одним сканированием.",
+      "Запустите клуб, забег или мастер-класс за пару минут. Гости регистрируются, платят вам напрямую и получают билет в Apple Wallet или Google Wallet. Вход — одним сканом.",
   },
   language: "Язык",
   theme: { toggle: "Сменить тему", light: "Светлая", dark: "Тёмная", system: "Системная" },

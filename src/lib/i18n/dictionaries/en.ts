@@ -1,8 +1,8 @@
 const en = {
   meta: {
-    title: "izipass — paid events with Wallet tickets",
+    title: "izipass — everyone deserves their own event",
     description:
-      "Create an event, take registrations, confirm payments and give attendees a ticket in Apple Wallet or Google Wallet. Check-in with one scan.",
+      "Start a club, a run or a workshop in minutes. Guests register, pay you directly and get a ticket in Apple Wallet or Google Wallet. Check-in with one scan.",
   },
   language: "Language",
   theme: { toggle: "Toggle theme", light: "Light", dark: "Dark", system: "System" },
