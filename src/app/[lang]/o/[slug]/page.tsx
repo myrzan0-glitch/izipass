@@ -5,6 +5,7 @@ import { notFound } from "next/navigation"
 import { Plus, Settings } from "lucide-react"
 
 import { OrganizerLinks } from "@/components/organizer-links"
+import { BackButton } from "@/components/back-button"
 import { SiteHeader } from "@/components/site-header"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
@@ -73,6 +74,7 @@ async function OrganizerPage({ params }: { params: PageProps<"/[lang]/o/[slug]">
           </div>
         </div>
       )}
+      <BackButton label={dict.app.back} className="mx-auto w-full max-w-5xl px-4 pt-6 sm:px-6" />
       {organizer.coverUrl && (
         <div className="mx-auto w-full max-w-5xl px-4 pt-6 sm:px-6">
           {/* eslint-disable-next-line @next/next/no-img-element -- our own resized image */}

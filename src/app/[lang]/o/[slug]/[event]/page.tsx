@@ -12,6 +12,7 @@ import { OrganizerLinks } from "@/components/organizer-links"
 import { PageSkeleton } from "@/components/page-skeleton"
 import { RegisterDialog, RegisterTrigger } from "@/components/register-dialog"
 import { RegistrationStatusBadge } from "@/components/registration-status"
+import { BackButton } from "@/components/back-button"
 import { SiteHeader } from "@/components/site-header"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Avatar, AvatarFallback, AvatarGroup, AvatarGroupCount } from "@/components/ui/avatar"
@@ -122,7 +123,8 @@ async function EventPage({ params, searchParams }: Props) {
 
   const page = (
     <>
-      <main className={`mx-auto grid w-full max-w-5xl flex-1 gap-8 px-4 pt-8 pb-16 sm:px-6 sm:pt-12 lg:grid-cols-[18rem_minmax(0,1fr)] lg:gap-10 ${canRegister ? "pb-28 lg:pb-16" : ""}`}>
+      <main className={`mx-auto grid w-full max-w-5xl flex-1 content-start gap-8 px-4 pt-8 pb-16 sm:px-6 sm:pt-12 lg:grid-cols-[18rem_minmax(0,1fr)] lg:gap-10 ${canRegister ? "pb-28 lg:pb-16" : ""}`}>
+        <BackButton label={dict.app.back} className="-mb-4 lg:col-span-2 lg:-mb-6" />
         <aside className="flex flex-col gap-6">
           {event.coverUrl ? (
             // eslint-disable-next-line @next/next/no-img-element -- our own resized image

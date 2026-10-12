@@ -1,7 +1,9 @@
+import { Suspense } from "react"
 import type { Metadata, Viewport } from "next"
 import { Geist_Mono, Inter } from "next/font/google"
 import { notFound } from "next/navigation"
 
+import { NavigationTracker } from "@/components/back-button"
 import { TestStandBar } from "@/components/test-stand-bar"
 import { ThemeProvider } from "@/components/theme-provider"
 import { Toaster } from "@/components/ui/sonner"
@@ -51,6 +53,9 @@ export default async function RootLayout({ children, params }: LayoutProps<"/[la
     <html lang={lang} suppressHydrationWarning className={`${inter.variable} ${geistMono.variable} h-full antialiased`}>
       <body className="flex min-h-full flex-col bg-background text-foreground">
         <ThemeProvider>
+          <Suspense fallback={null}>
+            <NavigationTracker />
+          </Suspense>
           {isTestStand() && <TestStandBar lang={lang} />}
           {children}
           <Toaster position="top-center" />

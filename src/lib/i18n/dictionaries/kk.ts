@@ -473,6 +473,7 @@ const kk: Dictionary = {
     yourCommunity: "Сіздің қауымдастығыңыз",
   },
   app: {
+    back: "Артқа",
     events: "Іс-шаралар",
     organizations: "Ұйымдарым",
     settings: "Баптаулар",

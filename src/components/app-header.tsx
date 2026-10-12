@@ -38,24 +38,7 @@ function Logo({ href }: { href: string }) {
   )
 }
 
-/** On public pages the logo goes to Events for signed-in people, else to the home page. */
-async function PublicLogo({ lang }: { lang: Locale }) {
-  const session = await getSession()
-  return <Logo href={session ? `/${lang}/events` : `/${lang}`} />
-}
-
-/**
- * The bar on top of every signed-in page: Events and My organizations,
- * language, Create event, account. On phones the sections live in the account menu.
- */
-export function AppHeader({
-  lang,
-  dict,
-  active,
-  variant = "app",
-  createHref,
-  sections,
-}: {
+type HeaderProps = {
   lang: Locale
   dict: Dictionary
   active: AppSection
@@ -64,68 +47,87 @@ export function AppHeader({
   createHref?: string
   /** Section links on public pages, such as How it works and Pricing on the landing page. */
   sections?: { href: string; label: string }[]
-}) {
-  const app = variant === "app"
+}
+
+/**
+ * The bar on top of every page: for signed-in people Events and My organizations, language,
+ * Create event and the account, also on public pages (an event, an organization), so they never
+ * look signed out. On phones the sections live in the account menu.
+ */
+export function AppHeader(props: HeaderProps) {
+  return (
+    <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/80">
+      <div className="mx-auto flex h-14 w-full max-w-6xl items-center gap-2 px-4 sm:px-6">
+        {props.variant === "public" ? (
+          <Suspense fallback={<HeaderRow {...props} signedIn={false} />}>
+            <PublicHeaderRow {...props} />
+          </Suspense>
+        ) : (
+          <HeaderRow {...props} signedIn />
+        )}
+      </div>
+    </header>
+  )
+}
+
+/** Public pages read the session to decide which bar to show. */
+async function PublicHeaderRow(props: HeaderProps) {
+  return <HeaderRow {...props} signedIn={!!(await getSession())} />
+}
+
+function HeaderRow({ lang, dict, active, createHref, sections, signedIn }: HeaderProps & { signedIn: boolean }) {
   const t = dict.app
   const links = [
     { key: "events", href: `/${lang}/events`, label: t.events, icon: Ticket },
     { key: "organizations", href: `/${lang}/organizations`, label: t.organizations, icon: Users },
   ] as const
   return (
-    <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/80">
-      <div className="mx-auto flex h-14 w-full max-w-6xl items-center gap-2 px-4 sm:px-6">
-        {app ? (
-          <Logo href={`/${lang}/events`} />
-        ) : (
-          <Suspense fallback={<Logo href={`/${lang}`} />}>
-            <PublicLogo lang={lang} />
-          </Suspense>
-        )}
-        {app && (
-          <nav aria-label={t.events} className="hidden items-center gap-1 md:flex">
-            {links.map(({ key, href, label, icon: Icon }) => (
-              <Button
-                key={key}
-                variant="ghost"
-                size="sm"
-                className={cn(active === key ? "bg-accent text-accent-foreground" : "text-muted-foreground")}
-                aria-current={active === key ? "page" : undefined}
-                asChild
-              >
-                <Link href={href}>
-                  <Icon />
-                  {label}
-                </Link>
-              </Button>
-            ))}
-          </nav>
-        )}
-        {sections && (
-          <nav className="hidden items-center gap-1 md:flex">
-            {sections.map((link) => (
-              <Button key={link.href} variant="ghost" size="sm" className="text-muted-foreground" asChild>
-                <a href={link.href}>{link.label}</a>
-              </Button>
-            ))}
-          </nav>
-        )}
-        <div className="flex items-center justify-end gap-2 md:flex-1">
-          <div className={app ? "hidden md:block" : undefined}>
-            <LanguageSwitcher lang={lang} label={dict.language} />
-          </div>
-          {app && (
-            <Button size="sm" className="max-md:size-8 max-md:px-0" aria-label={t.createEvent} asChild>
-              <Link href={createHref ?? `/${lang}/events/new${active === "organizations" ? "?from=organizations" : ""}`}>
-                <Plus />
-                <span className="max-md:sr-only">{t.createEvent}</span>
+    <>
+      <Logo href={signedIn ? `/${lang}/events` : `/${lang}`} />
+      {signedIn && (
+        <nav aria-label={t.events} className="hidden items-center gap-1 md:flex">
+          {links.map(({ key, href, label, icon: Icon }) => (
+            <Button
+              key={key}
+              variant="ghost"
+              size="sm"
+              className={cn(active === key ? "bg-accent text-accent-foreground" : "text-muted-foreground")}
+              aria-current={active === key ? "page" : undefined}
+              asChild
+            >
+              <Link href={href}>
+                <Icon />
+                {label}
               </Link>
             </Button>
-          )}
-          <Suspense fallback={<Skeleton className="size-8 rounded-full" />}>
-            <Account lang={lang} dict={dict} />
-          </Suspense>
+          ))}
+        </nav>
+      )}
+      {!signedIn && sections && (
+        <nav className="hidden items-center gap-1 md:flex">
+          {sections.map((link) => (
+            <Button key={link.href} variant="ghost" size="sm" className="text-muted-foreground" asChild>
+              <a href={link.href}>{link.label}</a>
+            </Button>
+          ))}
+        </nav>
+      )}
+      <div className="flex items-center justify-end gap-2 md:flex-1">
+        <div className={signedIn ? "hidden md:block" : undefined}>
+          <LanguageSwitcher lang={lang} label={dict.language} />
         </div>
+        {signedIn && (
+          <Button size="sm" className="max-md:size-8 max-md:px-0" aria-label={t.createEvent} asChild>
+            <Link href={createHref ?? `/${lang}/events/new${active === "organizations" ? "?from=organizations" : ""}`}>
+              <Plus />
+              <span className="max-md:sr-only">{t.createEvent}</span>
+            </Link>
+          </Button>
+        )}
+        <Suspense fallback={<Skeleton className="size-8 rounded-full" />}>
+          <Account lang={lang} dict={dict} />
+        </Suspense>
       </div>
-    </header>
+    </>
   )
 }

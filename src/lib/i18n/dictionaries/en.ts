@@ -471,6 +471,7 @@ const en = {
     yourCommunity: "Your community",
   },
   app: {
+    back: "Back",
     events: "Events",
     organizations: "My organizations",
     settings: "Settings",

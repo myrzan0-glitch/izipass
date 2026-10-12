@@ -473,6 +473,7 @@ const ru: Dictionary = {
     yourCommunity: "Ваше сообщество",
   },
   app: {
+    back: "Назад",
     events: "События",
     organizations: "Мои организации",
     settings: "Настройки",

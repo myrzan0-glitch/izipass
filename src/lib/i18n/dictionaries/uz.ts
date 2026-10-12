@@ -473,6 +473,7 @@ const uz: Dictionary = {
     yourCommunity: "Sizning hamjamiyatingiz",
   },
   app: {
+    back: "Orqaga",
     events: "Tadbirlar",
     organizations: "Tashkilotlarim",
     settings: "Sozlamalar",
