@@ -7,6 +7,7 @@ import { db } from "@/lib/db"
 import { sendEmail } from "@/lib/email"
 import { DEFAULT_LOCALE, isLocale, type Locale } from "@/lib/i18n/config"
 import { SITE_NAME, SITE_URL } from "@/lib/site"
+import { isTestStand } from "@/lib/test-stand"
 
 const bodySchema = z.object({
   email: z.email(),
@@ -48,5 +49,6 @@ export async function POST(request: Request) {
     text: `${BODY[lang]}\n\n${url}\n\n${SITE_NAME}`,
     html: `<p>${BODY[lang]}</p><p><a href="${url}">${url}</a></p><p>${SITE_NAME}</p>`,
   })
-  return Response.json({ ok: true })
+  // The test stand sends no email, so the link comes back to be shown on screen.
+  return Response.json(isTestStand() ? { ok: true, link: url.toString() } : { ok: true })
 }

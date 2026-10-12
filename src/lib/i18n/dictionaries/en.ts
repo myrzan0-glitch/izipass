@@ -675,6 +675,19 @@ const en = {
     findGuest: "Name or code",
     nobody: "Nobody here.",
   },
+  testStand: {
+    banner: "Test stand · the data is fake and emails are not sent",
+    accountsTitle: "Test accounts",
+    accountsBody: "Sign in with one click. To switch accounts, sign out first.",
+    organizer: "Organizer · izipass Test Club",
+    alina: "Guest · has tickets",
+    bobur: "Guest · receipt waiting for approval",
+    dilnoza: "Guest · needs to pay",
+    reset: "Reset test data",
+    resetDone: "Test data is back to the start.",
+    linkTitle: "Test stand: no email was sent",
+    openLink: "Open the sign-in link",
+  },
   footer: "izipass is a tool for organizers. Payments go directly to the organizer; izipass never holds your money.",
 }
 

@@ -14,12 +14,21 @@ import type { Locale } from "@/lib/i18n/config"
 import type { Dictionary } from "@/lib/i18n/dictionaries/en"
 import { fmt } from "@/lib/i18n/format"
 
-type Props = { lang: Locale; next: string; bot: string; initialError?: string; dict: Dictionary["login"] }
+type Props = {
+  lang: Locale
+  next: string
+  bot: string
+  initialError?: string
+  dict: Dictionary["login"]
+  /** On the test stand no email is sent: the sign-in link is shown instead. */
+  testStand?: Dictionary["testStand"]
+}
 
-export function LoginForm({ lang, next, bot, initialError, dict }: Props) {
+export function LoginForm({ lang, next, bot, initialError, dict, testStand }: Props) {
   const router = useRouter()
   const [email, setEmail] = useState("")
   const [sent, setSent] = useState<string | null>(null)
+  const [testLink, setTestLink] = useState<string>()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string>()
   // From the URL (e.g. an expired email link): shown above the form, not on the field.
@@ -37,6 +46,7 @@ export function LoginForm({ lang, next, bot, initialError, dict }: Props) {
         body: JSON.stringify({ email, lang, next }),
       })
       if (!res.ok) throw new Error()
+      setTestLink(((await res.json()) as { link?: string }).link)
       setSent(email)
     } catch {
       setError(dict.errors.generic)
@@ -59,6 +69,20 @@ export function LoginForm({ lang, next, bot, initialError, dict }: Props) {
     } catch {
       toast.error(dict.errors.telegram)
     }
+  }
+
+  if (sent && testStand && testLink) {
+    return (
+      <Alert>
+        <AlertTitle>{testStand.linkTitle}</AlertTitle>
+        <AlertDescription className="flex flex-col gap-3">
+          {sent}
+          <Button asChild size="sm">
+            <a href={testLink}>{testStand.openLink}</a>
+          </Button>
+        </AlertDescription>
+      </Alert>
+    )
   }
 
   if (sent) {

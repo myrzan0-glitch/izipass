@@ -25,6 +25,7 @@ async function main() {
   const token = process.env.TELEGRAM_BOT_TOKEN
   const site = (process.env.NEXT_PUBLIC_SITE_URL ?? "https://izipass.myrzan.com").replace(/\/$/, "")
   if (!token) return console.log("telegram: no TELEGRAM_BOT_TOKEN, skipped")
+  if (process.env.TEST_STAND === "1") return console.log("telegram: test stand, webhook left as is")
   if (process.env.VERCEL_ENV !== "production") return console.log("telegram: not a production deploy, webhook left as is")
   const url = `${site}/api/telegram/webhook`
   await call(token, "setWebhook", { url, secret_token: webhookSecret(token), allowed_updates: ["message", "callback_query"] })

@@ -2,12 +2,14 @@ import type { Metadata, Viewport } from "next"
 import { Geist_Mono, Inter } from "next/font/google"
 import { notFound } from "next/navigation"
 
+import { TestStandBar } from "@/components/test-stand-bar"
 import { ThemeProvider } from "@/components/theme-provider"
 import { Toaster } from "@/components/ui/sonner"
 import { LOCALES, isLocale } from "@/lib/i18n/config"
 import { getDictionary } from "@/lib/i18n/dictionaries"
 import { shareImage } from "@/lib/share-image"
 import { SITE_NAME, SITE_URL } from "@/lib/site"
+import { isTestStand } from "@/lib/test-stand"
 import "../globals.css"
 
 const inter = Inter({ variable: "--font-inter", subsets: ["latin", "cyrillic", "cyrillic-ext"] })
@@ -36,6 +38,8 @@ export async function generateMetadata({ params }: LayoutProps<"/[lang]">): Prom
     // og:site_name is the name link previews show above the title; without it Telegram guesses from the domain.
     openGraph: { siteName: SITE_NAME, title: dict.meta.title, description: dict.meta.description, type: "website", images: [shareImage(lang, dict.meta.title)] },
     twitter: { card: "summary_large_image" },
+    // The test stand stays out of search results.
+    ...(isTestStand() ? { robots: { index: false, follow: false } } : {}),
   }
 }
 
@@ -47,6 +51,7 @@ export default async function RootLayout({ children, params }: LayoutProps<"/[la
     <html lang={lang} suppressHydrationWarning className={`${inter.variable} ${geistMono.variable} h-full antialiased`}>
       <body className="flex min-h-full flex-col bg-background text-foreground">
         <ThemeProvider>
+          {isTestStand() && <TestStandBar lang={lang} />}
           {children}
           <Toaster position="top-center" />
         </ThemeProvider>

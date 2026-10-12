@@ -677,6 +677,19 @@ const uz: Dictionary = {
     findGuest: "Ism yoki kod",
     nobody: "Bu yerda hech kim yo‘q.",
   },
+  testStand: {
+    banner: "Test stend · ma’lumotlar soxta, xatlar yuborilmaydi",
+    accountsTitle: "Test akkauntlari",
+    accountsBody: "Bir bosishda kiring. Akkauntni almashtirish uchun avval chiqing.",
+    organizer: "Tashkilotchi · izipass Test Club",
+    alina: "Mehmon · chiptalari bor",
+    bobur: "Mehmon · chek tasdiqlanishini kutmoqda",
+    dilnoza: "Mehmon · to‘lashi kerak",
+    reset: "Test ma’lumotlarini tiklash",
+    resetDone: "Test ma’lumotlari boshlang‘ich holatga qaytdi.",
+    linkTitle: "Test stend: xat yuborilmadi",
+    openLink: "Kirish havolasini ochish",
+  },
   footer: "izipass — tashkilotchilar uchun vosita. To‘lov to‘g‘ridan-to‘g‘ri tashkilotchiga boradi; izipass pulingizni saqlamaydi.",
 }
 
