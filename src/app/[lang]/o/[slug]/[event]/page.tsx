@@ -32,7 +32,8 @@ import { absoluteImageUrl } from "@/lib/images"
 import { initials } from "@/lib/initials"
 import { isMember } from "@/lib/organizers"
 import { activeCount, expireHolds, goingPreview } from "@/lib/registrations"
-import { SITE_URL, TELEGRAM_BOT } from "@/lib/site"
+import { shareImage } from "@/lib/share-image"
+import { SITE_NAME, SITE_URL, TELEGRAM_BOT } from "@/lib/site"
 import { notifyLater } from "@/lib/telegram/notify"
 import { formatDateTime, formatDayParts, formatMoney } from "@/lib/time"
 
@@ -46,7 +47,8 @@ export async function generateMetadata({ params }: PageProps<"/[lang]/o/[slug]/[
   return {
     title: `${row.event.title} · ${row.organizer.name}`,
     description,
-    openGraph: { title: row.event.title, description, ...(image ? { images: [image] } : {}) },
+    openGraph: { siteName: SITE_NAME, title: row.event.title, description, images: [image ?? shareImage(lang, row.event.title)] },
+    twitter: { card: image ? "summary" : "summary_large_image" },
   }
 }
 

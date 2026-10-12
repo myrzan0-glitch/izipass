@@ -21,7 +21,8 @@ import { absoluteImageUrl } from "@/lib/images"
 import { getOrganizerBySlug, isMember } from "@/lib/organizers"
 import { getSession } from "@/lib/auth/session"
 import { registrationCounts } from "@/lib/registrations"
-import { SITE_URL } from "@/lib/site"
+import { shareImage } from "@/lib/share-image"
+import { SITE_NAME, SITE_URL } from "@/lib/site"
 import { TIME_ZONE, formatDate, formatDayParts, formatMoney } from "@/lib/time"
 
 export async function generateMetadata({ params }: PageProps<"/[lang]/o/[slug]">): Promise<Metadata> {
@@ -33,7 +34,8 @@ export async function generateMetadata({ params }: PageProps<"/[lang]/o/[slug]">
   return {
     title: organizer.name,
     description: organizer.description || undefined,
-    openGraph: { title: organizer.name, description: organizer.description || undefined, ...(logo ? { images: [logo] } : {}) },
+    openGraph: { siteName: SITE_NAME, title: organizer.name, description: organizer.description || undefined, images: [logo ?? shareImage(lang, organizer.name)] },
+    twitter: { card: logo ? "summary" : "summary_large_image" },
   }
 }
 

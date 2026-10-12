@@ -6,7 +6,8 @@ import { ThemeProvider } from "@/components/theme-provider"
 import { Toaster } from "@/components/ui/sonner"
 import { LOCALES, isLocale } from "@/lib/i18n/config"
 import { getDictionary } from "@/lib/i18n/dictionaries"
-import { SITE_URL } from "@/lib/site"
+import { shareImage } from "@/lib/share-image"
+import { SITE_NAME, SITE_URL } from "@/lib/site"
 import "../globals.css"
 
 const inter = Inter({ variable: "--font-inter", subsets: ["latin", "cyrillic", "cyrillic-ext"] })
@@ -32,7 +33,9 @@ export async function generateMetadata({ params }: LayoutProps<"/[lang]">): Prom
     title: { default: dict.meta.title, template: "%s · izipass" },
     description: dict.meta.description,
     alternates: { canonical: `/${lang}`, languages: Object.fromEntries(LOCALES.map((l) => [l, `/${l}`])) },
-    openGraph: { title: dict.meta.title, description: dict.meta.description, type: "website" },
+    // og:site_name is the name link previews show above the title; without it Telegram guesses from the domain.
+    openGraph: { siteName: SITE_NAME, title: dict.meta.title, description: dict.meta.description, type: "website", images: [shareImage(lang, dict.meta.title)] },
+    twitter: { card: "summary_large_image" },
   }
 }
 
